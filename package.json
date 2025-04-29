@@ -1,0 +1,13 @@
+{
+    "name": "com.prios.priostools",
+    "version": "1.0.0",
+    "displayName": "PriosTools",
+    "description": "A collection of tools for Unity development.",
+    "unity": "2022.1",
+    "dependencies": {
+        "com.unity.textmeshpro": "3.0.9"
+    },
+    "author": {
+        "name": "Martin Vadseth Høiby"
+    }
+}
