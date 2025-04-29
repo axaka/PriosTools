@@ -1,6 +1,6 @@
 {
     "name": "com.prios.priostools",
-    "version": "1.0.2",
+    "version": "1.0.3",
     "displayName": "PriosTools",
     "description": "A collection of tools for Unity development.",
     "unity": "2022.1",

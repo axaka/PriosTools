@@ -1,3 +1,7 @@
+## [1.0.3] - 2024-04-29
+### Changed the default slide animation
+- The default slide animation now has under- and over-shoot
+
 ## [1.0.2] - 2024-04-29
 ### Anchor Around UI Object
 - Added editor script to anchor UI Object perfectly around it
