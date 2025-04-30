@@ -4,10 +4,10 @@ using UnityEngine.UI;
 
 namespace PriosTools
 {
-    public class PriosSceneManager : MonoBehaviour
-    {
+	public class PriosSceneManager : MonoBehaviour
+	{
 		[SerializeField] private Type _type = Type.Name;
-        [SerializeField] private string _sceneName = "";
+		[SerializeField] private string _sceneName = "";
 
 		public enum Type
 		{

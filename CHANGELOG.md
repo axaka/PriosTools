@@ -1,3 +1,7 @@
+## [1.1.1] - 2024-04-30
+### Used Keys in the scene is now shown
+- A list of all known used keys in the current scene is now shown on the bottom of PriosEventReciever and PriosEventTrigger
+
 ## [1.1.0] - 2024-04-30
 ### Added PriosSceneManager
 - Use this to change to a new scene or restart current scene.
