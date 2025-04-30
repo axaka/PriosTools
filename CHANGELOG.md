@@ -1,3 +1,7 @@
+## [1.1.0] - 2024-04-30
+### Added PriosSceneManager
+- Use this to change to a new scene or restart current scene.
+
 ## [1.0.3] - 2024-04-29
 ### Changed the default slide animation
 - The default slide animation now has under- and over-shoot
