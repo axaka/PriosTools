@@ -14,7 +14,7 @@ namespace PriosTools
 		[Header("Animation Settings")]
 		[SerializeField] private PriosUIAnimatorData.AnimationType _animationType = PriosUIAnimatorData.AnimationType.Fade;
 		[SerializeField] private PriosUIAnimatorData.SlideDirection _slideDirection = PriosUIAnimatorData.SlideDirection.Down;
-		[SerializeField] private bool _preventIfRunning = true;
+		[SerializeField] private bool _preventIfRunning = false;
 		[SerializeField] private bool _preventIfAlreadyCorrect = true;
 
 		[Header("Animation Data")]
@@ -34,7 +34,17 @@ namespace PriosTools
 		private void Start()
 		{
 			SetSlideDestination();
+
+			bool preventIfRunning = _preventIfRunning;
+			bool preventIfAlreadyCorrect = _preventIfAlreadyCorrect;
+
+			_preventIfRunning = false;
+			_preventIfAlreadyCorrect = false;
+
 			Run(_startShowing, _startAnimating ? _animationData.AnimationDuration : 0f);
+
+			_preventIfRunning = preventIfRunning;
+			_preventIfAlreadyCorrect = preventIfAlreadyCorrect;
 		}
 
 		public void SetSlideDestination()

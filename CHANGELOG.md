@@ -1,3 +1,7 @@
+## [1.1.3] - 2024-04-30
+### PriosUIAnimator bugfix
+- preventIfRunning and preventIfAlreadyCorrect should no longer prevent the initial value from being set
+
 ## [1.1.2] - 2024-04-30
 ### PriosEvent bugfix
 - Prevent instance creation when exiting play mode
