@@ -1,3 +1,7 @@
+## [1.1.2] - 2024-04-30
+### PriosEvent bugfix
+- Prevent instance creation when exiting play mode
+
 ## [1.1.1] - 2024-04-30
 ### Used Keys in the scene is now shown
 - A list of all known used keys in the current scene is now shown on the bottom of PriosEventReciever and PriosEventTrigger

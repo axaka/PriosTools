@@ -19,6 +19,12 @@ namespace PriosTools
 			{
 				if (_instance == null)
 				{
+					// Prevent instance creation when exiting play mode
+					if (!Application.isPlaying)
+					{
+						return null;
+					}
+
 					_instance = FindObjectOfType<T>();
 
 					if (_instance == null)
