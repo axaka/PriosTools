@@ -45,6 +45,7 @@ using System;
 using System.Net;
 using System.IO;
 using System.Threading;
+using System.Linq;
 
 namespace PriosTools
 {
@@ -103,7 +104,8 @@ namespace PriosTools
 		/// <summary>
 		/// The data types which is allowed to convert from sheet to json object
 		/// </summary>
-		private static List<string> allowedDataTypes = new List<string>() { "string", "int", "bool", "float", "string[]", "int[]", "bool[]", "float[]" };
+		private static List<string> baseTypes = new List<string>() { "string", "int", "bool", "float" };
+
 
 		/// <summary>
 		/// Position of the scroll view.
@@ -225,7 +227,7 @@ namespace PriosTools
 			//Validate input
 			if (string.IsNullOrEmpty(spreadsheetKey))
 			{
-				Debug.LogError("spreadSheetKey can not be null!");
+				Debug.LogError($"{nameof(spreadsheetKey)} cannot be null!");
 				return;
 			}
 
@@ -279,12 +281,20 @@ namespace PriosTools
 				string Sheetname = valueRange.Range.Split('!')[0];
 				progressMessage = string.Format("Processing {0}...", Sheetname);
 				EditorUtility.DisplayCancelableProgressBar("Processing", progressMessage, progress / 100);
-				//Create json file
-				CreateJsonFile(Sheetname, jsonDir, valueRange);
+
+				string[][] sheetData = valueRange.Values
+					.Select(row => row.Select(cell => cell?.ToString() ?? "").ToArray())
+					.ToArray();
+
+
+				string jsonFilePath = Path.Combine(jsonDir, Sheetname + ".json");
+				CreateJsonFile(jsonFilePath, sheetData);
 
 				if (createClassFile)
 				{
-					CreateClassFile(jsonDir + Sheetname + ".json", Sheetname, classDir + Sheetname + ".cs");
+					string classFilePath = Path.Combine(classDir, Sheetname + ".cs");
+
+					CreateClassFile(jsonFilePath, Sheetname, classFilePath);
 				}
 
 				if (wantedSheetNames.Count <= 0)
@@ -302,266 +312,119 @@ namespace PriosTools
 		{
 			// Ensure the output directory exists
 			string directory = Path.GetDirectoryName(outputPath);
-			if (!Directory.Exists(directory))
-			{
-				Directory.CreateDirectory(directory);
-			}
+			Directory.CreateDirectory(directory);
 
 			// Create class file
 			JsonToCSharpGenerator.GenerateCSharpClass(jsonPath, className, outputPath);
 		}
 
-
-		private void CreateJsonFile(string fileName, string outputDirectory, ValueRange valueRange)
+		private static object ParseSingleValue(string type, string value)
 		{
-			//Get properties's name, data type and sheet data
-			IDictionary<int, string> propertyNames = new Dictionary<int, string>(); //Dictionary of (column index, property name of that column)
-			IDictionary<int, string> dataTypes = new Dictionary<int, string>();     //Dictionary of (column index, data type of that column)
-			IDictionary<int, Dictionary<int, string>> values = new Dictionary<int, Dictionary<int, string>>();  //Dictionary of (row index, dictionary of (column index, value in cell))
-			int rowIndex = 0;
-			foreach (IList<object> row in valueRange.Values)
+			return type switch
 			{
-				int columnIndex = 0;
-				foreach (string cellValue in row)
-				{
-					string value = cellValue;
-					if (rowIndex == 0)
-					{//This row is properties's name row
-						propertyNames.Add(columnIndex, value);
-					}
-					else if (rowIndex == 1)
-					{//This row is properties's data type row
-						dataTypes.Add(columnIndex, value);
-					}
-					else
-					{//Data rows
-					 //Because first row is name row and second row is data type row, so we will minus 2 from rowIndex to make data index start from 0
-						if (!values.ContainsKey(rowIndex - 2))
-						{
-							values.Add(rowIndex - 2, new Dictionary<int, string>());
-						}
-						values[rowIndex - 2].Add(columnIndex, value);
-					}
+				"string" => value ?? "",
+				"int" => string.IsNullOrEmpty(value) ? 0 : int.Parse(value),
+				"float" => string.IsNullOrEmpty(value) ? 0f : float.Parse(value),
+				"bool" => string.IsNullOrEmpty(value) ? false : bool.Parse(value),
+				_ => throw new ArgumentException($"Unsupported type: {type}"),
+			};
+		}
 
-					columnIndex++;
-				}
+		private static object ParseArrayValue(string type, string value, string separator)
+		{
+			if (string.IsNullOrWhiteSpace(value)) return Array.Empty<object>();
 
-				rowIndex++;
+			string[] parts = value.Split(new string[] { separator }, StringSplitOptions.None);
+
+			return type switch
+			{
+				"string" => parts.Select(s => s.Trim()).ToArray(),
+				"int" => parts.Select(s => string.IsNullOrWhiteSpace(s) ? 0 : int.Parse(s.Trim())).ToArray(),
+				"float" => parts.Select(s => string.IsNullOrWhiteSpace(s) ? 0f : float.Parse(s.Trim())).ToArray(),
+				"bool" => parts.Select(s => string.IsNullOrWhiteSpace(s) ? false : bool.Parse(s.Trim())).ToArray(),
+				_ => throw new ArgumentException($"Unsupported array base type: {type}"),
+			};
+		}
+
+
+		public static void CreateJsonFile(string filePath, string[][] sheetData)
+		{
+			if (sheetData.Length < 2)
+			{
+				Debug.LogWarning($"Sheet '{filePath}' does not contain enough rows to parse headers and types.");
+				return;
 			}
 
-			//Create list of Dictionaries (property name, value). Each dictionary represent for a object in a row of sheet.
-			List<object> datas = new List<object>();
-			foreach (int rowId in values.Keys)
+			string[] propertyNames = sheetData[0];
+			string[] dataTypes = sheetData[1];
+			var jsonDataList = new List<Dictionary<string, object>>();
+
+			for (int rowId = 2; rowId < sheetData.Length; rowId++)
 			{
+				var thisRow = sheetData[rowId];
+				var data = new Dictionary<string, object>();
 				bool thisRowHasError = false;
-				Dictionary<string, object> data = new Dictionary<string, object>();
-				foreach (int columnId in propertyNames.Keys)
-				{//Read through all columns in sheet, with each column, create a pair of property(string) and value(type depend on dataType[columnId])
-					if (thisRowHasError) break;
-					if ((!dataTypes.ContainsKey(columnId)) || (!allowedDataTypes.Contains(dataTypes[columnId])))
-						continue;   //There is not any data type or this data type is strange. May be this column is used for comments. Skip this column.
-					if (!values[rowId].ContainsKey(columnId))
+
+				for (int columnId = 0; columnId < propertyNames.Length; columnId++)
+				{
+					string propertyName = propertyNames[columnId].Trim();
+					if (string.IsNullOrEmpty(propertyName)) continue;
+
+					string dataType = dataTypes[columnId].Trim();
+					string strVal = columnId < thisRow.Length ? thisRow[columnId].Trim() : string.Empty;
+
+					try
 					{
-						values[rowId].Add(columnId, "");
+						if (baseTypes.Contains(dataType))
+						{
+							data[propertyName] = ParseSingleValue(dataType, strVal);
+						}
+						else if (dataType.Contains("[") && dataType.EndsWith("]"))
+						{
+							string baseType = dataType[..dataType.IndexOf("[")];
+							string separator = dataType[(dataType.IndexOf("[") + 1)..^1]; // extract inside brackets
+
+							if (!baseTypes.Contains(baseType))
+							{
+								Debug.LogWarning($"Unsupported array base type: {baseType} in {filePath}");
+								thisRowHasError = true;
+								break;
+							}
+
+							object parsedArray = ParseArrayValue(baseType, strVal, separator);
+							data[propertyName] = parsedArray;
+						}
+						else
+						{
+							Debug.LogWarning($"Unsupported type format: {dataType} in {filePath}");
+							thisRowHasError = true;
+							break;
+						}
 					}
-
-					string strVal = values[rowId][columnId];
-
-					switch (dataTypes[columnId])
+					catch (Exception e)
 					{
-						case "string":
-							{
-								data.Add(propertyNames[columnId], strVal);
-								break;
-							}
-						case "int":
-							{
-								int val = 0;
-								if (!string.IsNullOrEmpty(strVal))
-								{
-									try
-									{
-										val = int.Parse(strVal);
-									}
-									catch (System.Exception e)
-									{
-										Debug.LogError(string.Format("There is exception when parse value of property {0} of {1} class.\nDetail: {2}", propertyNames[columnId], fileName, e.ToString()));
-										thisRowHasError = true;
-										continue;
-									}
-								}
-								data.Add(propertyNames[columnId], val);
-								break;
-							}
-						case "bool":
-							{
-								bool val = false;
-								if (!string.IsNullOrEmpty(strVal))
-								{
-									try
-									{
-										val = bool.Parse(strVal);
-									}
-									catch (System.Exception e)
-									{
-										Debug.LogError(string.Format("There is exception when parse value of property {0} of {1} class.\nDetail: {2}", propertyNames[columnId], fileName, e.ToString()));
-										continue;
-									}
-								}
-								data.Add(propertyNames[columnId], val);
-								break;
-							}
-						case "float":
-							{
-								float val = 0f;
-								if (!string.IsNullOrEmpty(strVal))
-								{
-									try
-									{
-										val = float.Parse(strVal);
-									}
-									catch (System.Exception e)
-									{
-										Debug.LogError(string.Format("There is exception when parse value of property {0} of {1} class.\nDetail: {2}", propertyNames[columnId], fileName, e.ToString()));
-										continue;
-									}
-								}
-								data.Add(propertyNames[columnId], val);
-								break;
-							}
-						case "string[]":
-							{
-								string[] valArr = strVal.Split(new char[] { ',' });
-								data.Add(propertyNames[columnId], valArr);
-								break;
-							}
-						case "int[]":
-							{
-								string[] strValArr = strVal.Split(new char[] { ',' });
-								int[] valArr = new int[strValArr.Length];
-								if (string.IsNullOrEmpty(strVal.Trim()))
-								{
-									valArr = new int[0];
-								}
-								bool error = false;
-								for (int i = 0; i < valArr.Length; i++)
-								{
-									int val = 0;
-									if (!string.IsNullOrEmpty(strValArr[i]))
-									{
-										try
-										{
-											val = int.Parse(strValArr[i]);
-										}
-										catch (System.Exception e)
-										{
-											Debug.LogError(string.Format("There is exception when parse value of property {0} of {1} class.\nDetail: {2}", propertyNames[columnId], fileName, e.ToString()));
-											error = true;
-											break;
-										}
-									}
-									valArr[i] = val;
-								}
-								if (error)
-									continue;
-								data.Add(propertyNames[columnId], valArr);
-								break;
-							}
-						case "bool[]":
-							{
-								string[] strValArr = strVal.Split(new char[] { ',' });
-								bool[] valArr = new bool[strValArr.Length];
-								if (string.IsNullOrEmpty(strVal.Trim()))
-								{
-									valArr = new bool[0];
-								}
-								bool error = false;
-								for (int i = 0; i < valArr.Length; i++)
-								{
-									bool val = false;
-									if (!string.IsNullOrEmpty(strValArr[i]))
-									{
-										try
-										{
-											val = bool.Parse(strValArr[i]);
-										}
-										catch (System.Exception e)
-										{
-											Debug.LogError(string.Format("There is exception when parse value of property {0} of {1} class.\nDetail: {2}", propertyNames[columnId], fileName, e.ToString()));
-											error = true;
-											break;
-										}
-									}
-									valArr[i] = val;
-								}
-								if (error)
-									continue;
-								data.Add(propertyNames[columnId], valArr);
-								break;
-							}
-						case "float[]":
-							{
-								string[] strValArr = strVal.Split(new char[] { ',' });
-								float[] valArr = new float[strValArr.Length];
-								if (string.IsNullOrEmpty(strVal.Trim()))
-								{
-									valArr = new float[0];
-								}
-								bool error = false;
-								for (int i = 0; i < valArr.Length; i++)
-								{
-									float val = 0f;
-									if (!string.IsNullOrEmpty(strValArr[i]))
-									{
-										try
-										{
-											val = float.Parse(strValArr[i]);
-										}
-										catch (System.Exception e)
-										{
-											Debug.LogError(string.Format("There is exception when parse value of property {0} of {1} class.\nDetail: {2}", propertyNames[columnId], fileName, e.ToString()));
-											error = true;
-											break;
-										}
-									}
-									valArr[i] = val;
-								}
-								if (error)
-									continue;
-								data.Add(propertyNames[columnId], valArr);
-								break;
-							}
-						default: break; //This data type is strange, may be this column is used for comments, not for store data, so do nothing and read next column.
+						Debug.LogError($"Error parsing row {rowId + 1}, column '{propertyName}' in {filePath}: {e.Message}");
+						thisRowHasError = true;
+						break;
 					}
 				}
 
 				if (!thisRowHasError)
 				{
-					datas.Add(data);
-				}
-				else
-				{
-					Debug.LogError("There's error!");
+					jsonDataList.Add(data);
 				}
 			}
 
-			// Create json text, formatted if prettyJson is true
-			string jsonText = JsonConvert.SerializeObject((object)datas, prettyJson ? Formatting.Indented : Formatting.None);
-
-			// Create directory to store the JSON file
-			if (!outputDirectory.EndsWith("/"))
-				outputDirectory += "/";
-			Directory.CreateDirectory(outputDirectory);
-
-			string filePath = outputDirectory + fileName + ".json";
-
-			// Write JSON to file with UTF-8 encoding
-			using (StreamWriter strmWriter = new StreamWriter(filePath, false, System.Text.Encoding.UTF8))
+			string jsonString = JsonConvert.SerializeObject(jsonDataList, Formatting.Indented);
+			try
 			{
-				strmWriter.Write(jsonText);
+				File.WriteAllText(filePath, jsonString);
+			}
+			catch (Exception e)
+			{
+				Debug.LogError($"Failed to write JSON file at {filePath}: {e.Message}");
 			}
 
-			Debug.Log("Created: " + fileName + ".json");
 		}
 
 		UserCredential GetCredential()
