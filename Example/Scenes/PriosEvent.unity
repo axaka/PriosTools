@@ -3759,10 +3759,10 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   _startShowing: 1
-  _startAnimating: 1
+  _startAnimating: 0
   _animationType: 1
   _slideDirection: 3
-  _preventIfRunning: 1
+  _preventIfRunning: 0
   _preventIfAlreadyCorrect: 1
   _animationData: {fileID: 11400000, guid: e59f89481259bc14f919963926675608, type: 2}
 --- !u!225 &1145698295
