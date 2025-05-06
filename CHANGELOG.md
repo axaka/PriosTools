@@ -1,3 +1,8 @@
+## [1.2.1] - 2024-04-30
+###  Spreadsheet improvements
+- Full spreadsheet url should now be pasted instead of just the id
+- Added toggle to save class file
+
 ## [1.2.0] - 2024-04-30
 ###  Added support for google spreadsheets
 - Google spreadsheet tabs can now be downloaded as .json files

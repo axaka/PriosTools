@@ -62,7 +62,8 @@ namespace PriosTools
 		/// Key of the spreadsheet. Get from url of the spreadsheet.
 		/// </summary>
 		[SerializeField]
-		private string spreadSheetKey = "";
+		private string spreadsheetURL = "";
+		private string spreadsheetKey => ExtractSpreadsheetKey(spreadsheetURL);
 
 		/// <summary>
 		/// List of sheet names which want to download and convert to json file
@@ -75,6 +76,12 @@ namespace PriosTools
 		/// </summary>
 		[SerializeField]
 		private bool prettyJson = true;
+
+		/// <summary>
+		/// Should matching class file be created?
+		/// </summary>
+		[SerializeField]
+		private bool createClassFile = true;
 
 		/// <summary>
 		/// Name of application.
@@ -133,10 +140,11 @@ namespace PriosTools
 			GUILayout.BeginVertical();
 			{
 				GUILayout.Label("Settings", EditorStyles.boldLabel);
-				spreadSheetKey = EditorGUILayout.TextField("Spread sheet key", spreadSheetKey);
+				spreadsheetURL = EditorGUILayout.TextField("Spread sheet URL", spreadsheetURL);
 				jsonDir = EditorGUILayout.TextField("Path to store json files", jsonDir);
 				classDir = EditorGUILayout.TextField("Path to store class files", classDir);
 				prettyJson = EditorGUILayout.Toggle("Pretty Json", prettyJson);
+				createClassFile = EditorGUILayout.Toggle("Create matching classes", createClassFile);
 				GUILayout.Label("");
 				GUILayout.Label("Sheet names", EditorStyles.boldLabel);
 				EditorGUILayout.HelpBox("These sheets below will be downloaded. Let the list blank (remove all items) if you want to download all sheets", MessageType.Info);
@@ -197,16 +205,31 @@ namespace PriosTools
 			}
 		}
 
+		public static string ExtractSpreadsheetKey(string url)
+		{
+			var match = System.Text.RegularExpressions.Regex.Match(url, @"\/d\/([a-zA-Z0-9-_]+)");
+			if (match.Success && match.Groups.Count > 1)
+			{
+				return match.Groups[1].Value;
+			}
+			else
+			{
+				Console.WriteLine("Invalid Google Sheets URL.");
+				return null;
+			}
+		}
+
+
 		private void DownloadToJson()
 		{
 			//Validate input
-			if (string.IsNullOrEmpty(spreadSheetKey))
+			if (string.IsNullOrEmpty(spreadsheetKey))
 			{
 				Debug.LogError("spreadSheetKey can not be null!");
 				return;
 			}
 
-			Debug.Log("Start downloading from key: " + spreadSheetKey);
+			Debug.Log("Start downloading from: " + spreadsheetURL);
 
 			//Authenticate
 			progressMessage = "Authenticating...";
@@ -221,8 +244,8 @@ namespace PriosTools
 			progressMessage = "Get list of spreadsheets...";
 			EditorUtility.DisplayCancelableProgressBar("Processing", progressMessage, progress / 100);
 
-			Spreadsheet spreadSheetData = service.Spreadsheets.Get(spreadSheetKey).Execute();
-			IList<Sheet> sheets = spreadSheetData.Sheets;
+			Spreadsheet spreadsheetData = service.Spreadsheets.Get(spreadsheetKey).Execute();
+			IList<Sheet> sheets = spreadsheetData.Sheets;
 
 
 			//if((feed == null)||(feed.Entries.Count <= 0))
@@ -246,7 +269,7 @@ namespace PriosTools
 				}
 			}
 
-			SpreadsheetsResource.ValuesResource.BatchGetRequest request = service.Spreadsheets.Values.BatchGet(spreadSheetKey);
+			SpreadsheetsResource.ValuesResource.BatchGetRequest request = service.Spreadsheets.Values.BatchGet(spreadsheetKey);
 			request.Ranges = ranges;
 			BatchGetValuesResponse response = request.Execute();
 
@@ -258,7 +281,11 @@ namespace PriosTools
 				EditorUtility.DisplayCancelableProgressBar("Processing", progressMessage, progress / 100);
 				//Create json file
 				CreateJsonFile(Sheetname, jsonDir, valueRange);
-				CreateClassFile(jsonDir + Sheetname + ".json", Sheetname, classDir + Sheetname + ".cs");
+
+				if (createClassFile)
+				{
+					CreateClassFile(jsonDir + Sheetname + ".json", Sheetname, classDir + Sheetname + ".cs");
+				}
 
 				if (wantedSheetNames.Count <= 0)
 					progress += 85 / (response.ValueRanges.Count);

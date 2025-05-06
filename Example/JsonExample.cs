@@ -5,19 +5,19 @@ using UnityEngine;
 
 namespace PriosTools
 {
-    public class JsonExample : MonoBehaviour
-    {
-        [SerializeField] private TMP_Text _textField;
+	public class JsonExample : MonoBehaviour
+	{
+		[SerializeField] private TMP_Text _textField;
 
-        void Start()
-        {
-            string outputText = "";
+		void Start()
+		{
+			string outputText = "";
 			List<Test> items = Test.LoadJson();
-            foreach (var item in items)
-            {
-                outputText += $"{item.Var1} - {item.Var2}\n";
+			foreach (var item in items)
+			{
+				outputText += $"{item.Var1} - {item.Var2}\n";
 			}
-            _textField.text = outputText;
+			_textField.text = outputText;
 		}
-    }
+	}
 }
