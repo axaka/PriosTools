@@ -1,3 +1,9 @@
+## [1.2.0] - 2024-04-30
+###  Added support for google spreadsheets
+- Google spreadsheet tabs can now be downloaded as .json files
+- Based on https://assetstore.unity.com/packages/tools/utilities/google-sheet-to-json-90369 from Trung Dong
+- A matching .cs class file will be generated that has has the ability to load the data
+
 ## [1.1.3] - 2024-04-30
 ### PriosUIAnimator bugfix
 - preventIfRunning and preventIfAlreadyCorrect should no longer prevent the initial value from being set

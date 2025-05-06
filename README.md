@@ -5,3 +5,4 @@ Tools used in Prios Unity projects
 - PriosEventTrigger
 - PriosEventListener
 - PriosUIAnimator
+- Google Spreadsheet data loader
