@@ -1,10 +1,11 @@
-﻿using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Reflection;
+﻿
 using UnityEditor;
 using UnityEngine;
+using System;
+using System.Collections;
+using System.Collections.Generic;
+using System.Linq;
+using System.Reflection;
 
 namespace PriosTools
 {
@@ -12,197 +13,158 @@ namespace PriosTools
 	public class PriosSpreadsheetEditor : Editor
 	{
 		private PriosSpreadsheet spreadsheet;
-		private Dictionary<string, List<object>> parsedData = new();
-		private Dictionary<string, Type> dataTypes = new();
-		private Vector2 scrollPos;
-		private Dictionary<string, bool> foldoutStates = new();
+		private Vector2 scroll;
+		private Dictionary<string, Vector2> scrolls = new();
+		private Dictionary<string, bool> foldouts = new();
 
 		void OnEnable()
 		{
 			spreadsheet = (PriosSpreadsheet)target;
-			RefreshJsonData();
 		}
+
+		private async void Editor_GenerateClassesClicked()
+		{
+			await spreadsheet.DownloadAndGenerateClasses();
+			EditorUtility.DisplayDialog("Classes Generated",
+				"Class files were generated successfully.\n\nPlease wait for Unity to recompile.\nAfter that, use 'Download and Apply Data' to populate the spreadsheet.",
+				"OK");
+		}
+		private async void GenerateDataClicked()
+		{
+			await spreadsheet.DownloadAndApplyData();
+
+			int sheetCount = spreadsheet.SheetNames?.Count ?? 0;
+
+			string summary;
+			if (sheetCount > 0)
+			{
+				summary = $"Successfully parsed and stored data for {sheetCount} sheet{(sheetCount == 1 ? "" : "s")}.\n\nYou can now use the data directly from the ScriptableObject.";
+			}
+			else
+			{
+				summary = "No sheet data was found or applied.";
+			}
+
+			EditorUtility.DisplayDialog("Data Download Complete", summary, "OK");
+		}
+
+
 
 		public override void OnInspectorGUI()
 		{
 			DrawDefaultInspector();
+			GUILayout.Space(10);
+
+			EditorGUILayout.HelpBox("This tool downloads Google Sheet data, generates matching classes, and stores typed data in this ScriptableObject.", MessageType.Info);
+
+			if (GUILayout.Button("Generate C# Classes"))
+			{
+				Editor_GenerateClassesClicked();
+			}
+
+			if (GUILayout.Button("Download and Apply Data"))
+			{
+				GenerateDataClicked();
+			}
 
 			GUILayout.Space(10);
-			if (GUILayout.Button("Run"))
-			{
-				spreadsheet.Run();
-				AssetDatabase.Refresh();
-				RefreshJsonData();
-			}
+			EditorGUILayout.LabelField("Live Parsed Data", EditorStyles.boldLabel);
 
-			if (GUILayout.Button("Refresh Preview"))
-			{
-				AssetDatabase.Refresh();
-				RefreshJsonData();
-			}
+			scroll = EditorGUILayout.BeginScrollView(scroll);
 
-			GUILayout.Space(10);
-			EditorGUILayout.LabelField("📄 JSON Sheet Preview", EditorStyles.boldLabel);
-
-			scrollPos = EditorGUILayout.BeginScrollView(scrollPos);
-
-			if (spreadsheet.SheetNames == null || spreadsheet.SheetNames.Count == 0)
+			FieldInfo typedListField = typeof(PriosSpreadsheet).GetField("_typedLists", BindingFlags.NonPublic | BindingFlags.Instance);
+			if (typedListField != null)
 			{
-				EditorGUILayout.HelpBox("No sheet names found. Press 'Run' to fetch data.", MessageType.Info);
-			}
-			else
-			{
-				foreach (var sheetName in spreadsheet.SheetNames)
+				var typedLists = typedListField.GetValue(spreadsheet) as IEnumerable<object>;
+				if (typedLists != null)
 				{
-					string fileName = sheetName.Replace(" ", "_");
-
-					foldoutStates.TryAdd(fileName, false);
-					foldoutStates[fileName] = EditorGUILayout.Foldout(foldoutStates[fileName], $"▶ {fileName}", true);
-
-					if (foldoutStates[fileName])
+					foreach (var list in typedLists)
 					{
-						EditorGUI.indentLevel++;
+						Type listType = list.GetType();
+						if (!listType.IsGenericType) continue;
 
-						if (!parsedData.ContainsKey(fileName))
-						{
-							EditorGUILayout.HelpBox($"Missing JSON file for sheet: {fileName}", MessageType.Warning);
-						}
-						else
-						{
-							var entries = parsedData[fileName];
-							var type = dataTypes.ContainsKey(fileName) ? dataTypes[fileName] : null;
+						Type elementType = listType.GetGenericArguments()[0];
+						string label = elementType.Name;
 
-							for (int i = 0; i < entries.Count; i++)
+						if (!foldouts.ContainsKey(label))
+							foldouts[label] = false;
+
+						foldouts[label] = EditorGUILayout.Foldout(foldouts[label], label, true);
+						if (foldouts[label])
+						{
+							EditorGUI.indentLevel++;
+							int count = 0;
+
+							var fields = elementType.GetFields(BindingFlags.Public | BindingFlags.Instance);
+							if (fields.Length == 0)
 							{
-								var entry = entries[i];
-								EditorGUILayout.BeginVertical("box");
-								EditorGUILayout.LabelField($"Entry {i + 1}", EditorStyles.boldLabel);
-
-								if (type != null && entry != null)
-								{
-									FieldInfo[] fields = type.GetFields(BindingFlags.Public | BindingFlags.Instance);
-									foreach (var field in fields)
-									{
-										object value = null;
-										try { value = field.GetValue(entry); }
-										catch { }
-
-										string valueStr = value is Array arr
-											? string.Join(", ", arr.Cast<object>())
-											: value?.ToString();
-
-										//EditorGUILayout.LabelField(field.Name, valueStr ?? "<null>");
-										EditorGUILayout.LabelField($"{field.Name} ({field.FieldType.Name})", valueStr ?? "<null>");
-
-									}
-								}
-								else
-								{
-									EditorGUILayout.LabelField(entry?.ToString() ?? "<null>");
-								}
-
-								EditorGUILayout.EndVertical();
+								EditorGUILayout.LabelField("No public fields found.");
+								continue;
 							}
-						}
 
-						EditorGUI.indentLevel--;
-						GUILayout.Space(6);
+							// Combined Header: Type + Field Name (e.g., "int? MyField")
+							EditorGUILayout.BeginHorizontal("box");
+							foreach (var field in fields)
+							{
+								string typeName = GetPrettyTypeName(field.FieldType);
+								GUILayout.Label($"{typeName} {field.Name}", EditorStyles.boldLabel, GUILayout.MinWidth(120));
+							}
+							EditorGUILayout.EndHorizontal();
+
+
+							int rowCount = 0;
+							foreach (var item in (IEnumerable)list)
+							{
+								EditorGUILayout.BeginHorizontal("box");
+								foreach (var field in fields)
+								{
+									object value = field.GetValue(item);
+									string str = value is Array a ? string.Join(", ", a.Cast<object>()) : value?.ToString() ?? "";
+									GUIStyle wrapStyle = new GUIStyle(EditorStyles.label)
+									{
+										wordWrap = true
+									};
+									GUILayout.Label(str, wrapStyle, GUILayout.MinWidth(100), GUILayout.MaxWidth(300));
+								}
+								EditorGUILayout.EndHorizontal();
+
+								rowCount++;
+								if (rowCount > 100)
+								{
+									EditorGUILayout.LabelField("... truncated ...");
+									break;
+								}
+							}
+
+
+
+							EditorGUI.indentLevel--;
+						}
 					}
 				}
-
 			}
 
 			EditorGUILayout.EndScrollView();
 		}
 
-		private void RefreshJsonData()
+		private static string GetPrettyTypeName(Type type)
 		{
-			parsedData.Clear();
-			dataTypes.Clear();
+			if (type.IsArray)
+				return GetPrettyTypeName(type.GetElementType()) + "[]";
 
-			if (spreadsheet.SheetNames == null || spreadsheet.SheetNames.Count == 0)
-				return;
+			if (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(Nullable<>))
+				return GetPrettyTypeName(Nullable.GetUnderlyingType(type)) + "?";
 
-			foreach (string sheetName in spreadsheet.SheetNames)
+			return type.Name switch
 			{
-				Debug.Log($"[Preview] Looking for sheet: {sheetName}");
-
-				string fileName = sheetName.Replace(" ", "_");
-				string resourcePath = $"JsonData/{fileName}";
-
-				TextAsset ta = Resources.Load<TextAsset>(resourcePath);
-				if (ta == null)
-				{
-					Debug.LogWarning($"❌ Resources.Load failed: {resourcePath}");
-				}
-				else
-				{
-					Debug.Log($"✅ Found JSON file: {resourcePath}");
-				}
-
-
-				if (ta == null)
-				{
-					Debug.LogWarning($"JSON file not found in Resources: JsonData/{fileName}.json");
-					continue;
-				}
-
-				Type type = GetGeneratedType(fileName);
-				if (type != null)
-				{
-					Debug.Log($"✅ Found generated type: {type.Name}");
-				}
-				else
-				{
-					Debug.LogWarning($"❌ No matching generated class found for: {fileName}");
-				}
-
-				if (type != null)
-				{
-					var list = DeserializeToList(type, fileName);
-					if (list != null)
-					{
-						parsedData[fileName] = list;
-						dataTypes[fileName] = type;
-					}
-				}
-				else
-				{
-					var fallbackList = ta.text.Split('\n').Where(l => !string.IsNullOrWhiteSpace(l)).Cast<object>().ToList();
-					parsedData[fileName] = fallbackList;
-				}
-			}
-		}
-
-		private Type GetGeneratedType(string className)
-		{
-			return AppDomain.CurrentDomain.GetAssemblies()
-				.SelectMany(a => a.GetTypes())
-				.FirstOrDefault(t => t.Name == className && t.BaseType != null && t.BaseType.IsGenericType &&
-									 t.BaseType.GetGenericTypeDefinition() == typeof(PriosJsonSheetBase<>));
+				"String" => "string",
+				"Int32" => "int",
+				"Boolean" => "bool",
+				"Single" => "float",
+				_ => type.Name
+			};
 		}
 
 
-		private List<object> DeserializeToList(Type type, string fileName)
-		{
-			try
-			{
-				MethodInfo loadMethod = type.GetMethod("Load", BindingFlags.Public | BindingFlags.Static);
-				if (loadMethod == null) return null;
-
-				var rawList = loadMethod.Invoke(null, new object[] { fileName });
-				if (rawList is IEnumerable<object> casted)
-					return casted.ToList();
-				if (rawList is System.Collections.IEnumerable ie)
-					return ie.Cast<object>().ToList();
-
-				return null;
-			}
-			catch (Exception ex)
-			{
-				Debug.LogWarning($"Failed to load type {type.Name}: {ex.Message}");
-				return null;
-			}
-		}
 	}
 }
