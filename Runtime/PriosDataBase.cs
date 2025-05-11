@@ -5,8 +5,10 @@ using UnityEngine;
 
 namespace PriosTools
 {
+	public abstract class PriosDataBaseNonGeneric { }
+
 	[Serializable]
-	public abstract class PriosDataBase<T> where T : PriosDataBase<T>, new()
+	public abstract class PriosDataBase<T> : PriosDataBaseNonGeneric where T : PriosDataBase<T>, new()
 	{
 		public abstract string Version { get; }
 		public abstract bool IsValid();

@@ -33,6 +33,7 @@ namespace PriosTools
 		public List<string> SheetNames = new();
 
 		private static readonly string _classDir = "Assets/Scripts/DataStoreClass/";
+		private static readonly string _classPrefix = "PDS_";
 
 		private void OnEnable()
 		{
@@ -49,7 +50,7 @@ namespace PriosTools
 
 			foreach (var sheet in ParseHtmlData(_lastHtml))
 			{
-				var className = sheet.Key.Replace(" ", "_");
+				var className = _classPrefix + sheet.Key.Replace(" ", "_");
 				var sample = sheet.Value.FirstOrDefault();
 				if (sample?.Count == 0) continue;
 
@@ -85,7 +86,7 @@ namespace PriosTools
 			foreach (var sheet in sheetRawData)
 			{
 				string sheetName = sheet.Key;
-				string className = sheetName.Replace(" ", "_");
+				string className = _classPrefix + sheetName.Replace(" ", "_");
 				var rows = sheet.Value;
 
 				Type type = GetGeneratedType(className);
@@ -116,7 +117,7 @@ namespace PriosTools
 #endif
 		}
 
-		public List<T> Get<T>()
+		public List<T> Get<T>() where T : PriosDataBaseNonGeneric
 		{
 			return _typedLookup.TryGetValue(typeof(T), out var val) ? (List<T>)val : new List<T>();
 		}

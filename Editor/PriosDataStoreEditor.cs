@@ -108,6 +108,7 @@ namespace PriosTools
 				if (!listType.IsGenericType) continue;
 
 				Type elementType = listType.GetGenericArguments()[0];
+				if (!elementType.Name.StartsWith("PDS_")) continue;
 				string label = elementType.Name;
 
 				if (!foldouts.ContainsKey(label))
