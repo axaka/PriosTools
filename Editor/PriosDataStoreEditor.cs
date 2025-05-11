@@ -1,5 +1,4 @@
-﻿
-using UnityEditor;
+﻿using UnityEditor;
 using UnityEngine;
 using System;
 using System.Collections;
@@ -78,7 +77,6 @@ namespace PriosTools
 				{
 					EditorGUILayout.HelpBox("No HTML has been downloaded yet.", MessageType.Info);
 				}
-
 			}
 
 			EditorGUILayout.PropertyField(serializedObject.FindProperty(nameof(dataStore.url)), new GUIContent("URL"), true);
@@ -98,7 +96,6 @@ namespace PriosTools
 
 			EditorGUILayout.EndHorizontal();
 
-
 			GUILayout.Space(10);
 			EditorGUILayout.LabelField("Data Preview", EditorStyles.boldLabel);
 
@@ -117,31 +114,23 @@ namespace PriosTools
 				foldouts[label] = EditorGUILayout.Foldout(foldouts[label], label, true);
 				if (foldouts[label])
 				{
-
 					if (!scrolls.ContainsKey(label))
 						scrolls[label] = Vector2.zero;
 
-					var items = ((IEnumerable)list).Cast<object>().ToList(); // Cache the list to avoid multiple enumeration
+					var items = ((IEnumerable)list).Cast<object>().ToList();
 					int rowCount = items.Count;
 
-					float rowHeight = 30f; // Rough estimate per row
+					float rowHeight = 30f;
 					float estimatedHeight = Mathf.Min(rowCount, MaxRowsToDisplay) * rowHeight + 30f;
-
-					scrolls[label] = EditorGUILayout.BeginScrollView(
-						scrolls[label],
-						GUILayout.Height(Mathf.Min(estimatedHeight, 200))
-					);
-
 
 					var fields = elementType.GetFields(BindingFlags.Public | BindingFlags.Instance);
 					if (fields.Length == 0)
 					{
 						EditorGUILayout.LabelField("No public fields found.");
-						EditorGUILayout.EndScrollView();
 						continue;
 					}
 
-					// Header
+					// Sticky header (outside scroll view)
 					EditorGUILayout.BeginHorizontal("box");
 					foreach (var field in fields)
 					{
@@ -156,7 +145,11 @@ namespace PriosTools
 						wordWrap = true
 					};
 
-					// Data rows
+					scrolls[label] = EditorGUILayout.BeginScrollView(
+						scrolls[label],
+						GUILayout.Height(Mathf.Min(estimatedHeight, 200))
+					);
+
 					foreach (var item in items)
 					{
 						EditorGUILayout.BeginHorizontal("box");
@@ -164,20 +157,16 @@ namespace PriosTools
 						{
 							object value = field.GetValue(item);
 							string str = FormatFieldValue(value);
-
-							// Use the wrapped label style
 							GUILayout.Label(str, wrapStyle, GUILayout.MinWidth(100), GUILayout.ExpandWidth(true));
 						}
 						EditorGUILayout.EndHorizontal();
 					}
-
 
 					EditorGUILayout.EndScrollView();
 				}
 			}
 
 			serializedObject.ApplyModifiedProperties();
-
 		}
 
 		private static string FormatFieldValue(object value)
@@ -209,8 +198,5 @@ namespace PriosTools
 					: type.Name
 			};
 		}
-
-
-
 	}
 }
