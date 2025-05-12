@@ -151,6 +151,23 @@ namespace PriosTools
 #endif
 		}
 
+		private static string ValidateType(string type)
+		{
+			type = type.Trim().ToLowerInvariant();
+
+			// Normalize known aliases if needed
+			return type switch
+			{
+				"string" => "string",
+				"int" or "integer" => "int",
+				"float" or "double" => "float",
+				"bool" or "boolean" => "bool",
+				"date" or "datetime" => "date",
+				_ => "string" // fallback type
+			};
+		}
+
+
 		public static Dictionary<string, List<Dictionary<string, object>>> ParseHtmlData(string html)
 		{
 			var doc = new HtmlDocument();
@@ -183,22 +200,55 @@ namespace PriosTools
 				{
 					var cells = tr.SelectNodes("./td");
 					if (cells == null) continue;
-					table.Add(cells.Select(td => td.InnerText.Trim()).ToList());
+
+					table.Add(cells.Select(td =>
+					{
+						var raw = td.InnerHtml
+							.Replace("<br>", "\n")
+							.Replace("<br/>", "\n")
+							.Replace("<br />", "\n");
+
+						// Optionally convert escaped newlines if they appear in raw HTML:
+						raw = raw.Replace("\\n", "\n");
+
+						return HtmlEntity.DeEntitize(raw).Trim();
+					}).ToList());
 				}
 
-				if (table.Count == 0) continue;
+				if (table.Count == 0)
+				{
+					Debug.LogWarning($"[PriosDataStore] ⚠️ No data rows found in sheet: {name}");
+					continue;
+				}
+					
 
 				var header = table[0];
 				var types = new List<string>();
 				var names = new List<string>();
 				var seps = new List<string>();
+				var skipColumn = new List<bool>();
+
 
 				foreach (var cell in header)
 				{
 					var parts = cell.Split(' ', 2);
-					string type = parts[0];
-					string nameCol = parts.Length > 1 ? parts[1] : $"Col{types.Count}";
+					string type = parts[0].Trim();
+					string nameCol = parts.Length > 1 ? parts[1].Trim() : $"Col{types.Count}";
 					string sep = null;
+
+					// Handle comments
+					if (type == "#")
+					{
+						skipColumn.Add(true);
+						// Still need placeholders for consistency
+						types.Add(type);
+						names.Add(nameCol);
+						seps.Add(null);
+						continue;
+					}
+
+					skipColumn.Add(false);
+
 					if (type.Contains("[") && type.Contains("]"))
 					{
 						var start = type.IndexOf('[');
@@ -221,6 +271,7 @@ namespace PriosTools
 					seps.Add(sep);
 				}
 
+
 				var data = new List<Dictionary<string, object>>();
 				for (int i = 1; i < table.Count; i++)
 				{
@@ -230,6 +281,8 @@ namespace PriosTools
 
 					for (int c = 0; c < names.Count && c < row.Count; c++)
 					{
+						if (skipColumn[c]) continue;
+
 						var val = row[c];
 						var baseType = types[c];
 						var sep = seps[c];
@@ -238,6 +291,7 @@ namespace PriosTools
 						dict[names[c]] = parsed;
 						anyNonEmpty |= parsed is Array arr ? arr.Length > 0 : parsed != null && parsed.ToString().Trim() != "";
 					}
+
 
 					if (anyNonEmpty)
 						data.Add(dict);
