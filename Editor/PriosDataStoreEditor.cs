@@ -19,8 +19,8 @@ namespace PriosTools
 		private const string HelpText =
 		"To use this tool:\n" +
 		"1. Open your Google Sheet.\n" +
-		"2. Go to File > Share > Publish to Web.\n" +
-		"3. Copy the 'Published HTML' link and paste it into the File URL field.";
+		"2. Use the regular URL (the one you edit), not a published version.\n" +
+		"   Example: https://docs.google.com/spreadsheets/d/<ID>/edit";
 
 		void OnEnable()
 		{
@@ -52,34 +52,33 @@ namespace PriosTools
 		{
 			serializedObject.Update();
 
-			if (string.IsNullOrEmpty(dataStore.url) || !dataStore.url.Contains("/pubhtml"))
+			if (string.IsNullOrEmpty(dataStore.Url))
 			{
-				EditorGUILayout.HelpBox(HelpText, MessageType.Warning);
+				EditorGUILayout.HelpBox(HelpText, MessageType.Info);
+			}
+
+			EditorGUILayout.PropertyField(serializedObject.FindProperty(nameof(dataStore.Url)), new GUIContent("Google Sheets URL"));
+
+			DateTime? lastTime = dataStore.LastDownloadedTime;
+			if (lastTime.HasValue)
+			{
+				DateTime localTime = lastTime.Value.ToLocalTime();
+				TimeSpan elapsed = DateTime.Now - localTime;
+
+				string agoText = elapsed.TotalMinutes < 1
+					? $"{Mathf.FloorToInt((float)elapsed.TotalSeconds)} seconds ago"
+					: $"{Mathf.FloorToInt((float)elapsed.TotalMinutes)} minutes ago";
+
+				EditorGUILayout.HelpBox(
+					$"Last Downloaded: {localTime:yyyy-MM-dd HH:mm:ss}\n{agoText}",
+					MessageType.Info
+				);
 			}
 			else
 			{
-				DateTime? lastTime = dataStore.LastDownloadedTime;
-				if (lastTime.HasValue)
-				{
-					DateTime localTime = lastTime.Value.ToLocalTime(); // Convert from UTC to local time
-					TimeSpan elapsed = DateTime.Now - localTime;
-
-					string agoText = elapsed.TotalMinutes < 1
-						? $"{Mathf.FloorToInt((float)elapsed.TotalSeconds)} seconds ago"
-						: $"{Mathf.FloorToInt((float)elapsed.TotalMinutes)} minutes ago";
-
-					EditorGUILayout.HelpBox(
-						$"Last Downloaded: {localTime:yyyy-MM-dd HH:mm:ss}\n{agoText}",
-						MessageType.Info
-					);
-				}
-				else
-				{
-					EditorGUILayout.HelpBox("No HTML has been downloaded yet.", MessageType.Info);
-				}
+				EditorGUILayout.HelpBox("No CSV data downloaded yet.", MessageType.Info);
 			}
 
-			EditorGUILayout.PropertyField(serializedObject.FindProperty(nameof(dataStore.url)), new GUIContent("URL"), true);
 			GUILayout.Space(10);
 
 			EditorGUILayout.BeginHorizontal();
@@ -130,25 +129,20 @@ namespace PriosTools
 						continue;
 					}
 
-					// Sticky header (outside scroll view)
 					EditorGUILayout.BeginHorizontal("box");
 					foreach (var field in fields)
 					{
 						string typeLabel = GetPrettyTypeName(field.FieldType);
-						GUILayout.Label($"{typeLabel} {field.Name}", EditorStyles.boldLabel, GUILayout.MinWidth(100));
+						string displayName = field.Name.TrimEnd('_'); // ⬅️ this line ensures readable labels
+						GUILayout.Label($"{typeLabel} {displayName}", EditorStyles.boldLabel, GUILayout.MinWidth(100));
 					}
 					EditorGUILayout.EndHorizontal();
 
-					// Prepare a wrapped label style
-					var wrapStyle = new GUIStyle(EditorStyles.label)
-					{
-						wordWrap = true
-					};
 
-					scrolls[label] = EditorGUILayout.BeginScrollView(
-						scrolls[label],
-						GUILayout.Height(Mathf.Min(estimatedHeight, 200))
-					);
+
+					var wrapStyle = new GUIStyle(EditorStyles.label) { wordWrap = true };
+
+					scrolls[label] = EditorGUILayout.BeginScrollView(scrolls[label], GUILayout.Height(Mathf.Min(estimatedHeight, 200)));
 
 					foreach (var item in items)
 					{
@@ -171,8 +165,15 @@ namespace PriosTools
 
 		private static string FormatFieldValue(object value)
 		{
-			return value is Array a ? string.Join(", ", a.Cast<object>()) : value?.ToString();
+			if (value is Array a)
+				return string.Join(", ", a.Cast<object>());
+
+			if (value is Color c)
+				return $"#{ColorUtility.ToHtmlStringRGBA(c)}";
+
+			return value?.ToString();
 		}
+
 
 		private static string GetPrettyTypeName(Type type)
 		{
@@ -185,7 +186,6 @@ namespace PriosTools
 				return underlying != null ? GetPrettyTypeName(underlying) + "?" : "null?";
 			}
 
-			// Normalize common CLR names
 			return type.Name switch
 			{
 				"String" => "string",
@@ -193,6 +193,7 @@ namespace PriosTools
 				"Boolean" => "bool",
 				"Single" => "float",
 				"Double" => "double",
+				"DateTime" => "DateTime",
 				_ => type.IsGenericType
 					? $"{type.Name.Split('`')[0]}<{string.Join(", ", type.GetGenericArguments().Select(GetPrettyTypeName))}>"
 					: type.Name
