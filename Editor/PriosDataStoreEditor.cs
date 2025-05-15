@@ -1,9 +1,11 @@
 ﻿using UnityEditor;
+using UnityEditor.UIElements;
 using UnityEngine;
+using UnityEngine.UIElements;
 using System;
+using System.Linq;
 using System.Collections;
 using System.Collections.Generic;
-using System.Linq;
 using System.Reflection;
 
 namespace PriosTools
@@ -11,92 +13,38 @@ namespace PriosTools
 	[CustomEditor(typeof(PriosDataStore))]
 	public class PriosDataStoreEditor : Editor
 	{
-		private PriosDataStore dataStore;
-		private Dictionary<string, Vector2> scrolls = new();
-		private Dictionary<string, bool> foldouts = new();
-
-		private const int MaxRowsToDisplay = 100;
-		private const string HelpText =
-		"To use this tool:\n" +
-		"1. Open your Google Sheet.\n" +
-		"2. Use the regular URL (the one you edit), not a published version.\n" +
-		"   Example: https://docs.google.com/spreadsheets/d/<ID>/edit";
-
-		void OnEnable()
+		public override VisualElement CreateInspectorGUI()
 		{
-			dataStore = (PriosDataStore)target;
+			var dataStore = (PriosDataStore)target;
+			var root = new VisualElement();
+
+			var styleSheet = AssetDatabase.LoadAssetAtPath<StyleSheet>("Assets/Editor/PriosEditorStyles.uss");
+			if (styleSheet != null) root.styleSheets.Add(styleSheet);
+			else Debug.LogWarning("PriosEditorStyles.uss not found. Please ensure the file exists at the specified path.");
+
+			var headerBox = CreateHeader(dataStore);
+			root.Add(headerBox);
+
+			root.Add(CreateDataPreview(dataStore));
+
+
+			return root;
 		}
 
-		private async void Editor_GenerateDataModels()
+		private static VisualElement CreateDataPreview(PriosDataStore dataStore)
 		{
-			await dataStore.Editor_GenerateDataModels();
-			EditorUtility.DisplayDialog("Data Models Generated",
-				"Class files were generated successfully.\n\nPlease wait for Unity to recompile.\nAfter that, use 'Update Data' to populate the spreadsheet.",
-				"OK");
+			const float ColumnMinWidth = 125f;
+			var container = new VisualElement();
+
+			container.Add(new Label("Data Preview")
+			{
+				style = {
+			unityFontStyleAndWeight = FontStyle.Bold,
+			marginTop = 10,
+			marginBottom = 4,
+			fontSize = 13
 		}
-
-		private async void UpdateData()
-		{
-			await dataStore.UpdateData();
-
-			int count = dataStore.SheetNames?.Count ?? 0;
-			string plural = count == 1 ? "" : "s";
-			string message = count > 0
-				? $"Successfully parsed and stored data for {count} sheet{plural}.\n\nYou can now use the data directly from the ScriptableObject."
-				: "No sheet data was found or applied.";
-
-			EditorUtility.DisplayDialog("Data Update Complete", message, "OK");
-		}
-
-		public override void OnInspectorGUI()
-		{
-			serializedObject.Update();
-
-			if (string.IsNullOrEmpty(dataStore.Url))
-			{
-				EditorGUILayout.HelpBox(HelpText, MessageType.Info);
-			}
-
-			EditorGUILayout.PropertyField(serializedObject.FindProperty(nameof(dataStore.Url)), new GUIContent("Google Sheets URL"));
-
-			DateTime? lastTime = dataStore.LastDownloadedTime;
-			if (lastTime.HasValue)
-			{
-				DateTime localTime = lastTime.Value.ToLocalTime();
-				TimeSpan elapsed = DateTime.Now - localTime;
-
-				string agoText = elapsed.TotalMinutes < 1
-					? $"{Mathf.FloorToInt((float)elapsed.TotalSeconds)} seconds ago"
-					: $"{Mathf.FloorToInt((float)elapsed.TotalMinutes)} minutes ago";
-
-				EditorGUILayout.HelpBox(
-					$"Last Downloaded: {localTime:yyyy-MM-dd HH:mm:ss}\n{agoText}",
-					MessageType.Info
-				);
-			}
-			else
-			{
-				EditorGUILayout.HelpBox("No CSV data downloaded yet.", MessageType.Info);
-			}
-
-			GUILayout.Space(10);
-
-			EditorGUILayout.BeginHorizontal();
-
-			if (GUILayout.Button("Generate Data Models"))
-			{
-				Editor_GenerateDataModels();
-			}
-
-			if (GUILayout.Button("Update Data"))
-			{
-				UpdateData();
-			}
-
-			EditorGUILayout.EndHorizontal();
-
-			GUILayout.Space(10);
-			EditorGUILayout.LabelField("Data Preview", EditorStyles.boldLabel);
+			});
 
 			foreach (var list in dataStore.TypedLists)
 			{
@@ -105,87 +53,266 @@ namespace PriosTools
 
 				Type elementType = listType.GetGenericArguments()[0];
 				if (!elementType.Name.StartsWith("PDS_")) continue;
-				string label = elementType.Name;
 
-				if (!foldouts.ContainsKey(label))
-					foldouts[label] = false;
-
-				foldouts[label] = EditorGUILayout.Foldout(foldouts[label], label, true);
-				if (foldouts[label])
+				var foldout = new Foldout
 				{
-					if (!scrolls.ContainsKey(label))
-						scrolls[label] = Vector2.zero;
+					text = elementType.Name,
+					value = false
+				};
+				foldout.style.marginBottom = 6;
+				foldout.style.unityFontStyleAndWeight = FontStyle.Bold;
+				foldout.style.fontSize = 12;
+				container.Add(foldout);
 
-					var items = ((IEnumerable)list).Cast<object>().ToList();
-					int rowCount = items.Count;
+				var items = ((IEnumerable)list).Cast<object>().ToList();
+				var fields = elementType.GetFields(BindingFlags.Public | BindingFlags.Instance);
+				float totalWidth = fields.Length * ColumnMinWidth;
 
-					float rowHeight = 30f;
-					float estimatedHeight = Mathf.Min(rowCount, MaxRowsToDisplay) * rowHeight + 30f;
+				var scroll = new ScrollView(ScrollViewMode.Horizontal)
+				{
+					style = {
+				maxHeight = 220,
+				flexGrow = 1,
+				borderTopLeftRadius = 4,
+				borderTopRightRadius = 4,
+				borderBottomLeftRadius = 4,
+				borderBottomRightRadius = 4,
+				borderBottomWidth = 1,
+				borderTopWidth = 1,
+				borderLeftWidth = 1,
+				borderRightWidth = 1,
+				backgroundColor = new Color(0.11f, 0.11f, 0.11f)
+			}
+				};
+				foldout.Add(scroll);
 
-					var fields = elementType.GetFields(BindingFlags.Public | BindingFlags.Instance);
-					if (fields.Length == 0)
+				var verticalStack = new VisualElement
+				{
+					style = {
+				flexDirection = FlexDirection.Column,
+				minWidth = totalWidth
+			}
+				};
+				scroll.Add(verticalStack);
+
+				// Header row
+				var header = new VisualElement
+				{
+					style = {
+				flexDirection = FlexDirection.Row,
+				backgroundColor = new Color(0.22f, 0.22f, 0.22f),
+				borderBottomWidth = 1,
+				borderBottomColor = new Color(0.3f, 0.3f, 0.3f)
+			}
+				};
+
+				foreach (var field in fields)
+				{
+					header.Add(new Label($"{GetPrettyTypeName(field.FieldType)} {field.Name.TrimEnd('_')}")
 					{
-						EditorGUILayout.LabelField("No public fields found.");
-						continue;
-					}
+						style = {
+					minWidth = ColumnMinWidth,
+					marginRight = 5,
+					paddingLeft = 4,
+					unityFontStyleAndWeight = FontStyle.Bold,
+					fontSize = 11,
+					color = Color.white
+				}
+					});
+				}
+				verticalStack.Add(header);
 
-					EditorGUILayout.BeginHorizontal("box");
+				// Data rows
+				for (int i = 0; i < items.Count; i++)
+				{
+					var row = new VisualElement
+					{
+						style = {
+					flexDirection = FlexDirection.Row,
+					backgroundColor = i % 2 == 0
+						? new Color(0.16f, 0.16f, 0.16f)
+						: new Color(0.13f, 0.13f, 0.13f)                }
+					};
+
+					// Optional: Hover highlight effect
+					row.RegisterCallback<MouseEnterEvent>(_ =>
+					{
+						row.style.backgroundColor = new StyleColor(new Color(0.25f, 0.25f, 0.3f));
+					});
+					row.RegisterCallback<MouseLeaveEvent>(_ =>
+					{
+						row.style.backgroundColor = new StyleColor(i % 2 == 0
+							? new Color(0.16f, 0.16f, 0.16f)
+							: new Color(0.13f, 0.13f, 0.13f));
+					});
+
 					foreach (var field in fields)
 					{
-						string typeLabel = GetPrettyTypeName(field.FieldType);
-						string displayName = field.Name.TrimEnd('_'); // ⬅️ this line ensures readable labels
-						GUILayout.Label($"{typeLabel} {displayName}", EditorStyles.boldLabel, GUILayout.MinWidth(100));
-					}
-					EditorGUILayout.EndHorizontal();
-
-
-
-					var wrapStyle = new GUIStyle(EditorStyles.label) { wordWrap = true };
-
-					scrolls[label] = EditorGUILayout.BeginScrollView(scrolls[label], GUILayout.Height(Mathf.Min(estimatedHeight, 200)));
-
-					foreach (var item in items)
-					{
-						EditorGUILayout.BeginHorizontal("box");
-						foreach (var field in fields)
+						object val = field.GetValue(items[i]);
+						row.Add(new Label(FormatFieldValue(val))
 						{
-							object value = field.GetValue(item);
-							string str = FormatFieldValue(value);
-							GUILayout.Label(str, wrapStyle, GUILayout.MinWidth(100), GUILayout.ExpandWidth(true));
-						}
-						EditorGUILayout.EndHorizontal();
+							style = {
+						minWidth = ColumnMinWidth,
+						marginRight = 5,
+						paddingLeft = 4,
+						unityTextAlign = TextAnchor.MiddleLeft,
+						whiteSpace = WhiteSpace.Normal,
+						fontSize = 11,
+						color = new Color(0.9f, 0.9f, 0.9f)
+					}
+						});
 					}
 
-					EditorGUILayout.EndScrollView();
+					verticalStack.Add(row);
 				}
 			}
 
-			serializedObject.ApplyModifiedProperties();
+			return container;
 		}
 
-		private static string FormatFieldValue(object value)
+
+		private VisualElement CreateHeader(PriosDataStore dataStore)
 		{
-			if (value is Array a)
-				return string.Join(", ", a.Cast<object>());
+			var container = PriosEditor.CreateBox();
 
-			if (value is Color c)
-				return $"#{ColorUtility.ToHtmlStringRGBA(c)}";
+			var urlLabel = new Label("Data URL")
+			{
+				style = {
+					unityFontStyleAndWeight = FontStyle.Bold,
+					marginBottom = 2,
+					marginLeft = 5
+				}
+			};
 
-			return value?.ToString();
+			var urlField = new PropertyField(serializedObject.FindProperty("Url"))
+			{
+				label = "", // remove inline label
+			};
+			urlField.style.marginRight = 5;
+
+			container.Add(urlLabel);
+			container.Add(urlField);
+
+			var infoBox = new HelpBox("", HelpBoxMessageType.Info)
+			{
+				style = { marginTop = 5, marginBottom = 5 }
+			};
+			container.Add(infoBox);
+
+			infoBox.schedule.Execute(() =>
+			{
+				DateTime? lastTime = dataStore.LastDownloadedTime;
+				if (lastTime.HasValue && dataStore.SpreadsheetId != null)
+				{
+					DateTime localTime = lastTime.Value.ToLocalTime();
+					TimeSpan elapsed = DateTime.Now - localTime;
+					string agoText = elapsed.TotalMinutes < 1
+						? $"{Mathf.FloorToInt((float)elapsed.TotalSeconds)} seconds ago"
+						: $"{Mathf.FloorToInt((float)elapsed.TotalMinutes)} minutes ago";
+					infoBox.text = $"Last Downloaded: {localTime:yyyy-MM-dd HH:mm:ss}\n{agoText}";
+				}
+				else infoBox.text = "Insert a valid url to your google spreadsheet";
+			}).Every(1000).StartingIn(0);
+
+			// Generate Button
+			var generateBtn = PriosEditor.CreateButton(async () =>
+			{
+				await dataStore.Editor_GenerateDataModels();
+				EditorUtility.DisplayDialog("Data Models Generated",
+					"Class files were generated successfully.\n\nPlease wait for Unity to recompile.\nAfter that, use 'Update Data' to populate the spreadsheet.",
+					"OK");
+			}, icon: AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/Editor/Icons/Tools.png"),
+				size: new Vector2(16, 16), tooltip: "Generate Data Models");
+
+			// Clear Button
+			var clearBtn = PriosEditor.CreateButton(() =>
+			{
+				dataStore.ClearGeneratedData();
+				return System.Threading.Tasks.Task.CompletedTask;
+			}, icon: AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/Editor/Icons/Garbage-Closed.png"),
+			tooltip: "Removes generated classes and cached spreadsheet data", size: new Vector2(16, 16));
+
+			// Edit Button
+			var editBtn = PriosEditor.CreateButton(() =>
+			{
+				Application.OpenURL(dataStore.Url);
+				return System.Threading.Tasks.Task.CompletedTask;
+			}, icon: AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/Editor/Icons/Pencil.png"),
+				size: new Vector2(16, 16), tooltip: "Open Spreadsheet in the editor");
+
+			// Refresh Button
+			var updateBtn = PriosEditor.CreateButton(async () =>
+			{
+				await dataStore.UpdateData();
+				int count = dataStore.SheetNames?.Count ?? 0;
+				string plural = count == 1 ? "" : "s";
+				string message = count > 0
+					? $"Successfully parsed and stored data for {count} sheet{plural}.\n\nYou can now use the data directly from the ScriptableObject."
+					: "No sheet data was found or applied.";
+				EditorUtility.DisplayDialog("Data Update Complete", message, "OK");
+			}, icon: AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/Editor/Icons/Refresh.png"),
+				size: new Vector2(16, 16), tooltip: "Refresh Content Only");
+
+			var buttonRow = new VisualElement
+			{
+				style = {
+					flexDirection = FlexDirection.Row,
+					justifyContent = Justify.FlexStart
+				}
+			};
+			buttonRow.Add(generateBtn);
+			buttonRow.Add(clearBtn);
+			buttonRow.Add(editBtn);
+			buttonRow.Add(updateBtn);
+			container.Add(buttonRow);
+
+			return container;
 		}
 
+		private static string FormatFieldValue(object value, int maxItems = 10)
+		{
+			if (value == null) return "<null>";
+
+			if (value is Array array)
+			{
+				var items = array.Cast<object>().Select(item =>
+				{
+					if (item == null) return "<null>";
+					if (item is Color color) return $"#{ColorUtility.ToHtmlStringRGBA(color)}";
+					if (item is DateTime dt)
+					{
+						if (dt.Date == DateTime.Today && dt.TimeOfDay.TotalSeconds > 0) return dt.ToString("HH:mm");
+						if (dt.TimeOfDay.TotalSeconds == 0) return dt.ToString("yyyy-MM-dd");
+						return dt.ToString("yyyy-MM-dd HH:mm");
+					}
+					return item.ToString();
+				}).ToList();
+
+				int total = items.Count;
+				if (total == 0) return "[]";
+				var previewItems = items.Take(maxItems).ToList();
+				string suffix = total > maxItems ? $" (+{total - maxItems} more)" : "";
+				return $"[{string.Join(", ", previewItems)}{suffix}]";
+			}
+
+			if (value is Color c) return $"#{ColorUtility.ToHtmlStringRGBA(c)}";
+			if (value is DateTime dtSingle)
+			{
+				if (dtSingle.Date == DateTime.Today && dtSingle.TimeOfDay.TotalSeconds > 0)
+					return dtSingle.ToString("HH:mm");
+				return dtSingle.TimeOfDay.TotalSeconds == 0
+					? dtSingle.ToString("yyyy-MM-dd")
+					: dtSingle.ToString("yyyy-MM-dd HH:mm");
+			}
+
+			return value.ToString();
+		}
 
 		private static string GetPrettyTypeName(Type type)
 		{
-			if (type.IsArray)
-				return GetPrettyTypeName(type.GetElementType()) + "[]";
-
+			if (type.IsArray) return GetPrettyTypeName(type.GetElementType()) + "[]";
 			if (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(Nullable<>))
-			{
-				var underlying = Nullable.GetUnderlyingType(type);
-				return underlying != null ? GetPrettyTypeName(underlying) + "?" : "null?";
-			}
-
+				return GetPrettyTypeName(Nullable.GetUnderlyingType(type)) + "?";
 			return type.Name switch
 			{
 				"String" => "string",
@@ -194,9 +321,7 @@ namespace PriosTools
 				"Single" => "float",
 				"Double" => "double",
 				"DateTime" => "DateTime",
-				_ => type.IsGenericType
-					? $"{type.Name.Split('`')[0]}<{string.Join(", ", type.GetGenericArguments().Select(GetPrettyTypeName))}>"
-					: type.Name
+				_ => type.Name
 			};
 		}
 	}

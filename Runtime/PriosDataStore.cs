@@ -1,79 +1,69 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Globalization;
+using System.IO;
 using System.Linq;
 using System.Net.Http;
 using System.Reflection;
+using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using UnityEngine;
-using HtmlAgilityPack;
-using System.IO;
-using System.Text;
-using NodaTime;
-using NodaTime.Text;
+
+#if UNITY_EDITOR
 using UnityEditor;
-using System.Globalization;
-using System.Text.RegularExpressions;
-using UnityEditor.PackageManager;
-using System.Security.Cryptography;
-using Newtonsoft.Json.Linq;
+#endif
 
 namespace PriosTools
 {
 	[CreateAssetMenu(fileName = "PriosDataStore", menuName = "Data/PriosDataStore")]
 	public class PriosDataStore : ScriptableObject
 	{
-		[SerializeField] private string _errorMessage = "";
-
-		[SerializeField] public string Url = "https://docs.google.com/spreadsheets/d/1GsTBVi3-94PmEKTyDSvE8_gyUhQYV0d03LP72F1odYc/edit";
-		[SerializeField] private string _lastUrl = "";
-
-		public string SpreadsheetId
-		{
-			get
-			{
-				var match = Regex.Match(Url, @"\/d\/([^\/]+)");
-				if (match.Success)
-					return match.Groups[1].Value;
-
-				throw new Exception("Invalid Google Sheets URL");
-			}
-		}
-
-
+		[SerializeField] public string Url = "https://docs.google.com/spreadsheets/d/...";
 		[SerializeField] private long _lastHtmlDownloadTicks = 0;
-		public DateTime? LastDownloadedTime => _lastHtmlDownloadTicks > 0 ? new DateTime(_lastHtmlDownloadTicks, DateTimeKind.Utc) : null;
-
 		[SerializeField] private List<RawDataEntry> _rawDataEntries = new();
+		[SerializeField] private List<object> _typedLists = new();
+
+		public IEnumerable<object> TypedLists => _typedLists;
+		public DateTime? LastDownloadedTime => _lastHtmlDownloadTicks > 0 ? new DateTime(_lastHtmlDownloadTicks, DateTimeKind.Utc) : null;
+		public IEnumerable<(string Name, string Gid)> SheetGids => _rawDataEntries.Select(e => (e.Name, e.Gid));
+		public List<string> SheetNames = new();
+
+		private Dictionary<Type, object> _typedLookup = new();
+
+		private static readonly string _classDir = "Assets/Scripts/DataStoreClass/";
+		private static readonly string _classPrefix = "PDS_";
 
 		[Serializable]
 		public struct RawDataEntry
 		{
 			public string Name;
+			public string Gid;
 			[TextArea(3, 10)]
 			public string CSV;
 		}
 
-		private static readonly string _classDir = "Assets/Scripts/DataStoreClass/";
-		private static readonly string _classPrefix = "PDS_";
+		public string SpreadsheetId
+		{
+			get
+			{
+				var match = Regex.Match(Url, @"^https:\/\/docs\.google\.com\/spreadsheets\/d\/([a-zA-Z0-9-_]+)", RegexOptions.IgnoreCase);
+				return match.Success ? match.Groups[1].Value : null;
+			}
+		}
 
-		[SerializeField] private List<object> _typedLists = new();
-		public IEnumerable<object> TypedLists => _typedLists;
-
-		private Dictionary<Type, object> _typedLookup = new();
-		public List<string> SheetNames = new();
-
+		private void OnEnable()
+		{
+			if (_typedLists.Count == 0 && _rawDataEntries.Count > 0)
+			{
+				RehydrateFromCsvs();
+			}
+		}
 
 		public Dictionary<string, string> ExtractSpreadsheetInfo(string html)
 		{
 			var matches = Regex.Matches(html, @"items\.push\(\{name:\s*""(.*?)"",\s*pageUrl:.*?gid=(\d+)", RegexOptions.Singleline);
-			var data = new Dictionary<string, string>();
-
-			foreach (Match match in matches)
-			{
-				data[match.Groups[1].Value] = match.Groups[2].Value;
-			}
-
-			return data;
+			return matches.Cast<Match>().ToDictionary(m => m.Groups[1].Value, m => m.Groups[2].Value);
 		}
 
 		public async Task DownloadSheetDataAsync(string spreadsheetId, Dictionary<string, string> sheets)
@@ -81,18 +71,13 @@ namespace PriosTools
 			using var client = new HttpClient();
 			_rawDataEntries.Clear();
 
-			foreach (var sheet in sheets)
+			foreach (var (name, gid) in sheets)
 			{
-				string name = sheet.Key;
-				string gid = sheet.Value;
 				string url = $"https://docs.google.com/spreadsheets/d/{spreadsheetId}/export?format=csv&gid={gid}";
-
 				try
 				{
 					string rawCsv = await client.GetStringAsync(url);
-					string cleanedCsv = RemoveCommentColumnsFromCsv(rawCsv);
-
-					_rawDataEntries.Add(new RawDataEntry { Name = name, CSV = cleanedCsv });
+					_rawDataEntries.Add(new RawDataEntry { Name = name, Gid = gid, CSV = rawCsv });
 					Debug.Log($"✅ Saved sheet '{name}' to RawDataEntries.");
 				}
 				catch (Exception ex)
@@ -106,42 +91,29 @@ namespace PriosTools
 #endif
 		}
 
-		private static string RemoveCommentColumnsFromCsv(string csv)
+#if UNITY_EDITOR
+		public void ClearGeneratedData()
 		{
-			var lines = csv.Split('\n').Where(l => !string.IsNullOrWhiteSpace(l)).ToList();
-			if (lines.Count == 0)
-				return csv;
-
-			var header = lines[0].Split(',').Select(h => h.Trim()).ToList();
-
-			// Identify indexes to keep (not starting with "#")
-			var keepIndices = new List<int>();
-			for (int i = 0; i < header.Count; i++)
+			if (Directory.Exists(_classDir))
 			{
-				if (!header[i].StartsWith("#"))
-					keepIndices.Add(i);
+				foreach (var file in Directory.GetFiles(_classDir, $"{_classPrefix}*.cs"))
+				{
+					try { File.Delete(file); Debug.Log($"🧹 Deleted: {file}"); }
+					catch (Exception ex) { Debug.LogWarning($"❌ Could not delete {file}: {ex.Message}"); }
+				}
 			}
 
-			// Build new cleaned CSV
-			var sb = new StringBuilder();
-			foreach (var line in lines)
-			{
-				var cells = line.Split(',');
-				var filtered = keepIndices.Select(i => i < cells.Length ? cells[i] : "").ToArray();
-				sb.AppendLine(string.Join(",", filtered));
-			}
+			_rawDataEntries.Clear();
+			_typedLists.Clear();
+			_typedLookup.Clear();
+			SheetNames.Clear();
+			_lastHtmlDownloadTicks = 0;
 
-			return sb.ToString();
+			EditorUtility.SetDirty(this);
+			AssetDatabase.Refresh();
+			Debug.Log("🧼 Cleared generated data and metadata.");
 		}
-
-		private void OnEnable()
-		{
-			if (_typedLists.Count == 0 && _rawDataEntries.Count > 0)
-			{
-				RehydrateFromCsvs();
-			}
-		}
-
+#endif
 
 		public void RehydrateFromCsvs()
 		{
@@ -152,12 +124,12 @@ namespace PriosTools
 			foreach (var entry in _rawDataEntries)
 			{
 				var className = _classPrefix + entry.Name.Replace(" ", "_");
-				Type type = GetGeneratedType(className);
+				var type = GetGeneratedType(className);
 				if (type == null) continue;
 
 				var rows = CsvToRows(entry.CSV, type);
-				var baseMethod = typeof(PriosDataBase<>).MakeGenericType(type).GetMethod("FromRows", BindingFlags.Public | BindingFlags.Static);
-				var result = baseMethod.Invoke(null, new object[] { rows });
+				var method = typeof(PriosDataBase<>).MakeGenericType(type).GetMethod("FromRows", BindingFlags.Public | BindingFlags.Static);
+				var result = method.Invoke(null, new object[] { rows });
 
 				if (result is System.Collections.IEnumerable)
 				{
@@ -168,65 +140,49 @@ namespace PriosTools
 			}
 		}
 
-
 #if UNITY_EDITOR
 		public async Task Editor_GenerateDataModels()
 		{
-			string previewUrl = Url.Replace("/edit", "/preview");
+			string html = await new HttpClient().GetStringAsync(Url.Replace("/edit", "/preview"));
+			_lastHtmlDownloadTicks = DateTime.UtcNow.Ticks;
+			EditorUtility.SetDirty(this);
 
-			string html = await new HttpClient().GetStringAsync(previewUrl);
 			var sheets = ExtractSpreadsheetInfo(html);
-
 			await DownloadSheetDataAsync(SpreadsheetId, sheets);
 
 			foreach (var entry in _rawDataEntries)
 			{
 				string className = _classPrefix + entry.Name.Replace(" ", "_");
-
 				var lines = entry.CSV.Split('\n').Select(l => l.Trim()).Where(l => !string.IsNullOrWhiteSpace(l)).ToList();
 				if (lines.Count == 0) continue;
 
 				var header = lines[0].Split(',').ToList();
-				var dataLines = lines.Skip(1).ToList();
 
 				var types = new List<string>();
 				var names = new List<string>();
 
 				for (int col = 0; col < header.Count; col++)
 				{
-					var rawHeader = header[col];
-					var tokens = rawHeader.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-
-					// Extract type, name, separator
-					string typePart = tokens.ElementAtOrDefault(0) ?? "string";
-					string namePart = tokens.ElementAtOrDefault(1) ?? $"Col{col}";
-					string sepPart = tokens.ElementAtOrDefault(2);
-
-					var (typeHint, _) = ParseTypeAndSeparator($"{typePart} {sepPart ?? ""}".Trim());
-					var name = ValidateName(namePart, $"Col{col}");
-
-					names.Add(name);
+					var (typeHint, namePart, _) = ParseTypeAndSeparator(header[col]);
+					if (typeHint == "#") continue;
 					types.Add(typeHint);
+					names.Add(ValidateName(namePart, $"Col{col}"));
 				}
-
-
 
 				GenerateCsClass(className, types, names);
 			}
 
 			AssetDatabase.Refresh();
-			Debug.Log("[PriosDataStore] ✅ Classes generated.");
+			Debug.Log("✅ Classes generated.");
 		}
 #endif
 
-
 		public async Task UpdateData()
 		{
-			string previewUrl = Url.Replace("/edit", "/preview");
+			string html = await new HttpClient().GetStringAsync(Url.Replace("/edit", "/preview"));
+			_lastHtmlDownloadTicks = DateTime.UtcNow.Ticks;
 
-			string html = await new HttpClient().GetStringAsync(previewUrl);
 			var sheets = ExtractSpreadsheetInfo(html);
-
 			await DownloadSheetDataAsync(SpreadsheetId, sheets);
 			RehydrateFromCsvs();
 
@@ -235,307 +191,189 @@ namespace PriosTools
 #endif
 		}
 
+		// --- Core Helpers ---
+
 		private static List<Dictionary<string, object>> CsvToRows(string csv, Type type)
 		{
-			var lines = csv.Split('\n').Where(l => !string.IsNullOrWhiteSpace(l)).ToList();
-			if (lines.Count < 2) return new();
+			var parsed = PriosCsvParser.Parse(csv);
+			if (parsed.Count < 2) return new();
 
-			var header = lines[0].Split(',').Select(h => h.Trim()).ToList();
-			var typeAndSep = header.Select(h => ParseTypeAndSeparator(h.Split(' ')[0])).ToList();
-			var names = header.Select((h, i) => ValidateName(h.Split(' ').Length > 1 ? h.Split(' ')[1] : "", $"Col{i}")).ToList();
+			var header = parsed[0];
+			var typeMap = header.Select(ParseTypeAndSeparator).ToList();
 
-			var rows = new List<Dictionary<string, object>>();
-
-			for (int i = 1; i < lines.Count; i++)
+			return parsed.Skip(1).Select(row =>
 			{
-				var row = lines[i].Split(',');
 				var dict = new Dictionary<string, object>();
-
-				for (int j = 0; j < header.Count && j < row.Length; j++)
+				for (int j = 0; j < header.Count && j < row.Count; j++)
 				{
-					var (typeName, sep) = typeAndSep[j];
+					var (typeName, fieldName, sep) = typeMap[j];
 					string val = row[j].Trim();
 
-					object parsed = sep != null
+					dict[fieldName] = typeName.EndsWith("[]")
 						? ParseArrayValue(typeName, val, sep)
 						: ParseSingleValue(typeName, val);
-
-					dict[names[j]] = parsed;
 				}
-
-				rows.Add(dict);
-			}
-
-			return rows;
+				return dict;
+			}).ToList();
 		}
-
 
 		public void SetData<T>(List<T> list)
 		{
 			_typedLookup[typeof(T)] = list;
 #if UNITY_EDITOR
-			if (!_typedLists.Contains(list))
-				_typedLists.Add(list);
+			if (!_typedLists.Contains(list)) _typedLists.Add(list);
 #endif
 		}
 
 		public List<T> Get<T>() where T : PriosDataBaseNonGeneric
 		{
-			return _typedLookup.TryGetValue(typeof(T), out var val) ? (List<T>)val : new List<T>();
+			return _typedLookup.TryGetValue(typeof(T), out var val) ? (List<T>)val : new();
 		}
 
-		private static (string type, string? separator) ParseTypeAndSeparator(string rawTypeSegment)
+		// --- Parsing Utilities ---
+
+		private static (string type, string name, string separator) ParseTypeAndSeparator(string header)
 		{
-			if (string.IsNullOrWhiteSpace(rawTypeSegment))
-				return ("string", null);
+			var tokens = header?.Split(' ', StringSplitOptions.RemoveEmptyEntries) ?? Array.Empty<string>();
+			string baseType = tokens.ElementAtOrDefault(0) ?? "string";
+			string name = tokens.ElementAtOrDefault(1) ?? "Col";
+			string separator = tokens.ElementAtOrDefault(2);
 
-			rawTypeSegment = rawTypeSegment.Trim();
+			bool isArray = baseType.EndsWith("[]");
+			bool isNullable = baseType.EndsWith("?");
 
-			if (rawTypeSegment.StartsWith("#"))
-				return ("#", null);
-
-			var tokens = rawTypeSegment.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-
-			string baseTypeToken = tokens.ElementAtOrDefault(0)?.Trim() ?? "string";
-			bool isArray = baseTypeToken.EndsWith("[]");
-			bool isNullable = baseTypeToken.EndsWith("?");
-
-			string typeCore = baseTypeToken.Replace("[]", "").Replace("?", "").ToLowerInvariant();
-
-			typeCore = typeCore switch
+			string typeCore = baseType.Replace("[]", "").Replace("?", "").ToLowerInvariant() switch
 			{
 				"int" or "integer" => "int",
 				"float" or "double" => "float",
 				"bool" or "boolean" => "bool",
-				"string" => "string",
 				"date" or "datetime" => "DateTime",
 				"color" => "Color",
 				_ => "string"
 			};
 
-
 			if (isArray) typeCore += "[]";
 			if (isNullable && !typeCore.EndsWith("?") && typeCore != "string") typeCore += "?";
+			if (isArray && string.IsNullOrEmpty(separator)) separator = ",";
 
-			string? separator = isArray && tokens.Length >= 3 ? tokens[2] : (isArray ? ";" : null);
-
-			return (typeCore, separator);
-		}
-
-		private static string ValidateName(string name, string backupGeneratedName)
-		{
-			if (string.IsNullOrWhiteSpace(name))
-				return backupGeneratedName;
-
-			name = name.Trim().Trim(';'); // Remove trailing semicolon(s)
-
-			var sb = new StringBuilder();
-			if (!char.IsLetter(name[0]) && name[0] != '_')
-				sb.Append('_');
-
-			foreach (char c in name)
-			{
-				sb.Append(char.IsLetterOrDigit(c) || c == '_' ? c : '_');
-			}
-
-			var result = sb.ToString();
-
-			return string.IsNullOrWhiteSpace(result) ? backupGeneratedName : result;
+			return (typeCore, name, isArray ? separator : null);
 		}
 
 		private static object[] ParseArrayValue(string type, string value, string sep)
 		{
 			if (string.IsNullOrWhiteSpace(value)) return Array.Empty<object>();
-
-			// Get base type (e.g. int[] => int)
 			string baseType = type.Replace("[]", "").Replace("?", "");
-
-			return value
-				.Split(new[] { sep }, StringSplitOptions.RemoveEmptyEntries)
-				.Select(val => ParseSingleValue(baseType, val.Trim()))
+			return value.Split(new[] { sep }, StringSplitOptions.None)
+				.Select(v => ParseSingleValue(baseType, v.Trim()))
 				.ToArray();
 		}
 
 		private static object ParseSingleValue(string type, string value)
 		{
 			if (string.IsNullOrWhiteSpace(value)) return null;
+			type = type?.TrimEnd('?');
 
-			switch (type)
+			return type switch
 			{
-				case "string": return value;
-
-				case "int":
-					var intVal = value.Replace(",", ".").Replace("−", "-");
-					return int.TryParse(intVal, NumberStyles.Any, CultureInfo.InvariantCulture, out var i) ? i : null;
-
-				case "float":
-					var floatVal = value.Replace(",", ".").Replace("−", "-");
-					return float.TryParse(floatVal, NumberStyles.Any, CultureInfo.InvariantCulture, out var f) ? f : null;
-
-				case "bool":
-					var boolVal = value.Trim()
-						.Replace("−", "-")       // Replace Unicode minus
-						.Replace("\u00A0", " ")  // Replace non-breaking space
-						.ToLowerInvariant();
-
-					switch (boolVal)
-					{
-						case "1":
-						case "yes":
-						case "y":
-						case "true":
-							return true;
-
-						case "0":
-						case "no":
-						case "n":
-						case "false":
-							return false;
-
-						default:
-							return null;
-					}
-
-				case "date": return TryParseCustomDate(value);
-
-				case "color": return ParseColor(value);
-
-				default: return value;
-			}
+				"string" => value,
+				"int" => int.TryParse(value.Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out var i) ? i : null,
+				"float" => float.TryParse(value.Replace(",", ".").Replace("−", "-"), NumberStyles.Any, CultureInfo.InvariantCulture, out var f) ? f : null,
+				"bool" => value.Trim().ToLowerInvariant() switch
+				{
+					"1" or "yes" or "y" or "true" => true,
+					"0" or "no" or "n" or "false" => false,
+					_ => null
+				},
+				"DateTime" => TryParseCustomDate(value),
+				"Color" => ParseColor(value),
+				_ => value
+			};
 		}
 
 		private static Color? ParseColor(string value)
 		{
-			if (string.IsNullOrWhiteSpace(value))
-				return null;
-
+			if (string.IsNullOrWhiteSpace(value)) return null;
 			value = value.Trim().ToLowerInvariant();
 
-			// Handle named colors
-			switch (value)
+			return value switch
 			{
-				case "red": return Color.red;
-				case "green": return Color.green;
-				case "blue": return Color.blue;
-				case "black": return Color.black;
-				case "white": return Color.white;
-				case "yellow": return Color.yellow;
-				case "cyan": return Color.cyan;
-				case "magenta": return Color.magenta;
-				case "gray":
-				case "grey": return Color.grey;
-			}
+				"red" => Color.red,
+				"green" => Color.green,
+				"blue" => Color.blue,
+				"black" => Color.black,
+				"white" => Color.white,
+				"yellow" => Color.yellow,
+				"cyan" => Color.cyan,
+				"magenta" => Color.magenta,
+				"gray" or "grey" => Color.grey,
+				_ => TryParseColorFallback(value)
+			};
+		}
 
-			// Normalize hex string (with or without #)
-			if (Regex.IsMatch(value, @"^#?[0-9a-f]{3,8}$"))
-			{
-				if (!value.StartsWith("#"))
-					value = "#" + value;
+		private static Color? TryParseColorFallback(string value)
+		{
+			if (!value.StartsWith("#") && Regex.IsMatch(value, @"^[0-9a-f]{6,8}$"))
+				value = "#" + value;
 
-				// Expand shorthand #rgb to #rrggbb
-				if (value.Length == 4)
-				{
-					value = "#" + string.Concat(value.Skip(1).Select(c => $"{c}{c}"));
-				}
+			if (ColorUtility.TryParseHtmlString(value, out var colorHex)) return colorHex;
 
-				// Append full alpha if missing
-				if (value.Length == 7)
-					value += "FF";
-
-				if (ColorUtility.TryParseHtmlString(value, out var htmlColor))
-					return htmlColor;
-			}
-
-			// Handle comma-separated RGB(A)
 			var parts = value.Split(',');
-			if (parts.Length == 3 || parts.Length == 4)
+			if (parts.Length is 3 or 4 && parts.All(p => byte.TryParse(p.Trim(), out _)))
 			{
-				if (parts.All(p => byte.TryParse(p.Trim(), out _)))
-				{
-					byte r = byte.Parse(parts[0].Trim());
-					byte g = byte.Parse(parts[1].Trim());
-					byte b = byte.Parse(parts[2].Trim());
-					byte a = parts.Length == 4 ? byte.Parse(parts[3].Trim()) : (byte)255;
-					return new Color32(r, g, b, a);
-				}
+				byte r = byte.Parse(parts[0]);
+				byte g = byte.Parse(parts[1]);
+				byte b = byte.Parse(parts[2]);
+				byte a = parts.Length == 4 ? byte.Parse(parts[3]) : (byte)255;
+				return new Color32(r, g, b, a);
 			}
 
-			Debug.LogWarning($"[ParseColor] ⚠️ Could not parse color value: '{value}'");
+			Debug.LogWarning($"⚠️ Could not parse color: '{value}'");
 			return null;
 		}
 
-
 		private static DateTime? TryParseCustomDate(string input)
 		{
-			input = input.Replace("kl.", "", StringComparison.OrdinalIgnoreCase).Replace("  ", " ").Trim();
-
-			try
+			var formats = new[]
 			{
-				var patterns = new[]
-				{
-					"dd.MM.yyyy HH.mm.ss",
-					"dd.MM.yyyy HH:mm:ss",
-					"yyyy-MM-dd HH:mm:ss",
-					"M/d/yyyy h:mm:ss tt",
-					"d.M.yyyy HH:mm"
-				};
+				"HH:mm", "H:mm",
+				"yyyy-MM-dd HH:mm", "yyyy-MM-dd HH:mm:ss",
+				"dd.MM.yyyy HH:mm:ss", "dd.MM.yyyy HH.mm.ss",
+				"yyyy-MM-dd", "dd.MM.yyyy"
+			};
 
-				// Extract potential timezone suffix
-				var tokens = input.Split(' ');
-				var last = tokens.Last();
-				string timeZone = "UTC";
-
-				// Very basic mapping, extend as needed
-				var zoneMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-				{
-					["CET"] = "Europe/Oslo",
-					["CEST"] = "Europe/Oslo",
-					["UTC"] = "UTC",
-					["PST"] = "America/Los_Angeles",
-					["EST"] = "America/New_York"
-				};
-
-				if (zoneMap.ContainsKey(last))
-				{
-					input = string.Join(" ", tokens.Take(tokens.Length - 1));
-					timeZone = zoneMap[last];
-				}
-
-				var zone = DateTimeZoneProviders.Tzdb.GetZoneOrNull(timeZone) ?? NodaTime.DateTimeZoneProviders.Tzdb["UTC"];
-
-				foreach (var fmt in patterns)
-				{
-					var pattern = LocalDateTimePattern.CreateWithInvariantCulture(fmt);
-					var parseResult = pattern.Parse(input);
-					if (parseResult.Success)
-						return parseResult.Value.InZoneLeniently(zone).ToDateTimeUtc();
-				}
-
-			}
-			catch (Exception ex)
+			foreach (var fmt in formats)
 			{
-				Debug.LogWarning($"[PriosDataStore] ⚠️ Error parsing date with NodaTime: '{input}'{ex.Message}");
+				if (DateTime.TryParseExact(input, fmt, CultureInfo.InvariantCulture, DateTimeStyles.AssumeLocal, out var dt))
+				{
+					return fmt.StartsWith("H") ? DateTime.Today.Add(dt.TimeOfDay) : dt;
+				}
 			}
 
-			Debug.LogWarning($"[PriosDataStore] ⚠️ Failed to parse date: '" +
-				$"{input}'Supported formats include:" +
-				$"- dd.MM.yyyy HH.mm.ss" +
-				$"- dd.MM.yyyy HH:mm:ss" +
-				$"- yyyy-MM-dd HH:mm:ss" +
-				$"- M/d/yyyy h:mm:ss tt (e.g. 5/9/2025 1:24:02 AM)" +
-				$"- d.M.yyyy HH:mm" +
-				$"Each of the above may optionally end with a time zone suffix like 'CET', 'UTC', 'EST'.");
+			Debug.LogWarning($"⚠️ Could not parse DateTime: '{input}'");
 			return null;
+		}
+
+		private static string ValidateName(string name, string fallback)
+		{
+			if (string.IsNullOrWhiteSpace(name)) return fallback;
+
+			var sb = new StringBuilder();
+			if (!char.IsLetter(name[0]) && name[0] != '_') sb.Append('_');
+
+			foreach (char c in name)
+				sb.Append(char.IsLetterOrDigit(c) || c == '_' ? c : '_');
+
+			return string.IsNullOrWhiteSpace(sb.ToString()) ? fallback : sb.ToString();
 		}
 
 		private static string GetCSharpType(object value)
 		{
 			if (value is object[] arr && arr.Length > 0 && arr[0] != null)
 			{
-				string elementType = GetCSharpType(arr[0]);
-				if (elementType == "string?") elementType = "string";
-				if (!elementType.EndsWith("?") && elementType != "string") elementType += "?";
-				return elementType + "[]";
+				string element = GetCSharpType(arr[0]);
+				if (element == "string?") element = "string";
+				if (!element.EndsWith("?") && element != "string") element += "?";
+				return element + "[]";
 			}
 
 			return value switch
@@ -561,25 +399,18 @@ namespace PriosTools
 			sb.AppendLine("{");
 
 			for (int i = 0; i < types.Count; i++)
-			{
 				sb.AppendLine($"    public {types[i]} {names[i]};");
-			}
 
 			sb.AppendLine();
 			sb.AppendLine("    public override string Version => \"1.0\";");
-			sb.AppendLine();
 			sb.AppendLine("    public override bool IsValid() => true;");
 			sb.AppendLine();
 			sb.AppendLine("    public override string ToString()");
 			sb.AppendLine("    {");
 			sb.AppendLine("        return string.Join(\", \", new string[]");
 			sb.AppendLine("        {");
-
 			for (int i = 0; i < names.Count; i++)
-			{
 				sb.AppendLine($"            \"{names[i]}: {{{names[i]}}}\"{(i < names.Count - 1 ? "," : "")}");
-			}
-
 			sb.AppendLine("        });");
 			sb.AppendLine("    }");
 			sb.AppendLine("}");
@@ -587,9 +418,8 @@ namespace PriosTools
 			if (!Directory.Exists(_classDir))
 				Directory.CreateDirectory(_classDir);
 
-			string path = Path.Combine(_classDir, className + ".cs");
-			File.WriteAllText(path, sb.ToString());
-			Debug.Log($"[CodeGen] ✅ {path}");
+			File.WriteAllText(Path.Combine(_classDir, className + ".cs"), sb.ToString());
+			Debug.Log($"✅ Generated: {className}");
 		}
 
 		private static Type GetGeneratedType(string className)
