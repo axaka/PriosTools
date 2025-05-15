@@ -217,7 +217,7 @@ namespace PriosTools
 			// Generate Button
 			var generateBtn = PriosEditor.CreateButton(async () =>
 			{
-				await dataStore.Editor_GenerateDataModels();
+				await dataStore.GenerateDataModels();
 				EditorUtility.DisplayDialog("Data Models Generated",
 					"Class files were generated successfully.\n\nPlease wait for Unity to recompile.\nAfter that, use 'Update Data' to populate the spreadsheet.",
 					"OK");
