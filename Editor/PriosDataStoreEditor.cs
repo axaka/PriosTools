@@ -239,16 +239,24 @@ namespace PriosTools
 			infoBox.schedule.Execute(() =>
 			{
 				DateTime? lastTime = dataStore.LastDownloadedTime;
-				if (lastTime.HasValue && dataStore.SpreadsheetId != null)
+				var handler = dataStore.CurrentHandler;
+				string handlerLabel = handler?.SourceType ?? "Unknown";
+
+				if (lastTime.HasValue)
 				{
 					DateTime localTime = lastTime.Value.ToLocalTime();
 					TimeSpan elapsed = DateTime.Now - localTime;
+
 					string agoText = elapsed.TotalMinutes < 1
 						? $"{Mathf.FloorToInt((float)elapsed.TotalSeconds)} seconds ago"
 						: $"{Mathf.FloorToInt((float)elapsed.TotalMinutes)} minutes ago";
-					infoBox.text = $"Last Downloaded: {localTime:yyyy-MM-dd HH:mm:ss}\n{agoText}";
+
+					infoBox.text = $"Source: {handlerLabel}\nLast Downloaded: {localTime:yyyy-MM-dd HH:mm:ss}\n{agoText}";
 				}
-				else infoBox.text = "Insert a valid URL to your data source";
+				else
+				{
+					infoBox.text = $"Source: {handlerLabel}\nNo data downloaded yet.";
+				}
 			}).Every(1000).StartingIn(0);
 
 			// Generate Button
