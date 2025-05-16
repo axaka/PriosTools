@@ -58,28 +58,28 @@ namespace PriosTools
 			_slideDestination = position;
 		}
 
-		public void Run(bool show)
+		public float Run(bool show)
 		{
-			Run(show, _animationData.AnimationDuration);
+			return Run(show, _animationData.AnimationDuration);
 		}
-		public void Run(bool show, float duration)
+		public float Run(bool show, float duration)
 		{
-			Run(show, duration, _animationType, _slideDirection);
+			return Run(show, duration, _animationType, _slideDirection);
 		}
 
-		public void Run(bool show,
+		public float Run(bool show,
 		float duration,
 		PriosUIAnimatorData.AnimationType animationType,
 		PriosUIAnimatorData.SlideDirection slideDirection)
 		{
 			if (_preventIfRunning && Running)
 			{
-				return;
+				return 0.0f;
 			}
 
 			if (_preventIfAlreadyCorrect && Showing == show)
 			{
-				return;
+				return 0.0f;
 			}
 
 			CanvasGroup.interactable = show;
@@ -94,6 +94,8 @@ namespace PriosTools
 					_animationCoroutine = StartCoroutine(AnimateSlide(show, duration, slideDirection));
 					break;
 			}
+
+			return duration;
 		}
 
 		IEnumerator AnimateSlide(bool show,
