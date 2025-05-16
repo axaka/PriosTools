@@ -19,6 +19,7 @@ namespace PriosTools
 			sb.AppendLine("using System.Collections.Generic;");
 			sb.AppendLine("using PriosTools;");
 			sb.AppendLine();
+
 			sb.AppendLine("[Serializable]");
 			sb.AppendLine($"public class {className} : PriosDataBase<{className}>");
 			sb.AppendLine("{");
@@ -27,12 +28,13 @@ namespace PriosTools
 			{
 				sb.AppendLine($"    public {types[i]} {names[i]};");
 			}
-
 			sb.AppendLine();
+
 			sb.AppendLine("    public override string Version => \"1.0\";");
 			sb.AppendLine();
 			sb.AppendLine("    public override bool IsValid() => true;");
 			sb.AppendLine();
+
 			sb.AppendLine("    public override string ToString()");
 			sb.AppendLine("    {");
 			sb.AppendLine("        return string.Join(\", \", new string[]");
@@ -40,11 +42,12 @@ namespace PriosTools
 
 			for (int i = 0; i < names.Count; i++)
 			{
-				sb.AppendLine($"            \"{names[i]}: {{{names[i]}}}\"{(i < names.Count - 1 ? "," : "")}");
+				sb.AppendLine($"            $\"{names[i]}: {{{names[i]}}}\"{(i < names.Count - 1 ? "," : "")}");
 			}
 
 			sb.AppendLine("        });");
 			sb.AppendLine("    }");
+
 			sb.AppendLine("}");
 
 			if (!Directory.Exists(_classDir))
