@@ -125,19 +125,6 @@ namespace PriosTools
 			}).ToList();
 		}
 
-		public static Dictionary<string, string> ExtractSpreadsheetInfo(string html)
-		{
-			var matches = Regex.Matches(html, @"items\.push\(\{name:\s*""(.*?)"",\s*pageUrl:.*?gid=(\d+)", RegexOptions.Singleline);
-			var data = new Dictionary<string, string>();
-
-			foreach (Match match in matches)
-			{
-				data[match.Groups[1].Value] = match.Groups[2].Value;
-			}
-
-			return data;
-		}
-
 		public static (List<string> types, List<string> names) ExtractTypesAndNames(List<string> headerRow)
 		{
 			var types = new List<string>();

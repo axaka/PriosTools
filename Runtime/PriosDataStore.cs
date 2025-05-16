@@ -51,6 +51,25 @@ namespace PriosTools
 		private static readonly string _classDir = "Assets/Scripts/DataStoreClass/";
 		private static readonly string _classPrefix = "PDS_";
 
+		private static List<IPriosDataSourceHandler> _handlers;
+		public IPriosDataSourceHandler CurrentHandler => 
+			PriosDataStoreHandlerRegistry.GetHandlerForUrl(Url);
+
+		private static List<IPriosDataSourceHandler> GetAvailableHandlers()
+		{
+			if (_handlers != null) return _handlers;
+
+			_handlers = AppDomain.CurrentDomain.GetAssemblies()
+				.SelectMany(a => a.GetTypes())
+				.Where(t => typeof(IPriosDataSourceHandler).IsAssignableFrom(t) && !t.IsInterface && !t.IsAbstract)
+				.Select(t => (IPriosDataSourceHandler)Activator.CreateInstance(t))
+				.ToList();
+
+			return _handlers;
+		}
+
+
+
 		private void OnEnable()
 		{
 			if (_typedLists.Count == 0 && _rawDataEntries.Count > 0)
@@ -62,58 +81,43 @@ namespace PriosTools
 #if UNITY_EDITOR
 		public async Task GenerateDataModels()
 		{
-			string previewUrl = Url.Replace("/edit", "/preview");
-			string html = await new HttpClient().GetStringAsync(previewUrl);
-
-			_lastHtmlDownloadTicks = DateTime.UtcNow.Ticks; // Optional utility to update timestamp
-			var sheets = PriosCsvTools.ExtractSpreadsheetInfo(html);
-
-			await DownloadSheetDataAsync(SpreadsheetId, sheets);
-
-			foreach (var entry in _rawDataEntries)
+			var handler = GetAvailableHandlers().FirstOrDefault(h => h.CanHandle(Url));
+			if (handler == null)
 			{
-				var className = "PDS_" + entry.Name.Replace(" ", "_");
-				var parsed = PriosCsvTools.Parse(entry.CSV);
-				if (parsed.Count < 1) continue;
-
-				var header = parsed[0];
-				var (types, names) = PriosCsvTools.ExtractTypesAndNames(header);
-
-				PriosCodeGenerator.GenerateCsClass(className, types, names);
+				Debug.LogError($"❌ No handler found for URL: {Url}");
+				return;
 			}
 
-			AssetDatabase.Refresh();
-			Debug.Log("[PriosEditor] ✅ Classes generated.");
+			try
+			{
+				_rawDataEntries.Clear();
+				var entries = await handler.FetchDataAsync(Url);
+				_rawDataEntries.AddRange(entries);
+				_lastHtmlDownloadTicks = DateTime.UtcNow.Ticks;
+
+				foreach (var entry in _rawDataEntries)
+				{
+					var className = "PDS_" + entry.Name.Replace(" ", "_");
+					var parsed = PriosCsvTools.Parse(entry.CSV);
+					if (parsed.Count < 1) continue;
+
+					var header = parsed[0];
+					var (types, names) = PriosCsvTools.ExtractTypesAndNames(header);
+
+					PriosCodeGenerator.GenerateCsClass(className, types, names);
+				}
+
+				AssetDatabase.Refresh();
+				Debug.Log("[PriosEditor] ✅ Classes generated.");
+				EditorUtility.SetDirty(this);
+			}
+			catch (Exception ex)
+			{
+				Debug.LogError($"❌ Failed to generate models: {ex.Message}");
+			}
 		}
 #endif
 
-		public async Task DownloadSheetDataAsync(string spreadsheetId, Dictionary<string, string> sheets)
-		{
-			using var client = new HttpClient();
-			_rawDataEntries.Clear();
-
-			foreach (var sheet in sheets)
-			{
-				string name = sheet.Key;
-				string gid = sheet.Value;
-				string url = $"https://docs.google.com/spreadsheets/d/{spreadsheetId}/export?format=csv&gid={gid}";
-
-				try
-				{
-					string rawCsv = await client.GetStringAsync(url);
-					_rawDataEntries.Add(new RawDataEntry { Name = name, Gid = gid, CSV = rawCsv });
-					Debug.Log($"✅ Saved sheet '{name}' to RawDataEntries.");
-				}
-				catch (Exception ex)
-				{
-					Debug.LogError($"❌ Failed to download sheet {name}: {ex.Message}");
-				}
-			}
-
-#if UNITY_EDITOR
-			EditorUtility.SetDirty(this);
-#endif
-		}
 
 #if UNITY_EDITOR
 		public void ClearGeneratedData()
@@ -174,18 +178,32 @@ namespace PriosTools
 
 		public async Task UpdateData()
 		{
-			string previewUrl = Url.Replace("/edit", "/preview");
-			string html = await new HttpClient().GetStringAsync(previewUrl);
-			_lastHtmlDownloadTicks = DateTime.UtcNow.Ticks;
+			var handler = GetAvailableHandlers().FirstOrDefault(h => h.CanHandle(Url));
+			if (handler == null)
+			{
+				Debug.LogError($"❌ No handler found for URL: {Url}");
+				return;
+			}
 
-			var sheets = PriosCsvTools.ExtractSpreadsheetInfo(html);
-			await DownloadSheetDataAsync(SpreadsheetId, sheets);
-			RehydrateFromCsvs();
+			try
+			{
+				_rawDataEntries.Clear();
+				var entries = await handler.FetchDataAsync(Url);
+				_rawDataEntries.AddRange(entries);
+				_lastHtmlDownloadTicks = DateTime.UtcNow.Ticks;
 
+				RehydrateFromCsvs();
 #if UNITY_EDITOR
-			EditorUtility.SetDirty(this);
+				EditorUtility.SetDirty(this);
 #endif
+			}
+			catch (Exception ex)
+			{
+				Debug.LogError($"❌ Failed to fetch data: {ex.Message}");
+			}
 		}
+
+
 
 		public void SetData<T>(List<T> list)
 		{

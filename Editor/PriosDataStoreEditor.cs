@@ -7,6 +7,7 @@ using System.Linq;
 using System.Collections;
 using System.Collections.Generic;
 using System.Reflection;
+using System.Threading.Tasks;
 
 namespace PriosTools
 {
@@ -22,11 +23,8 @@ namespace PriosTools
 			if (styleSheet != null) root.styleSheets.Add(styleSheet);
 			else Debug.LogWarning("PriosEditorStyles.uss not found. Please ensure the file exists at the specified path.");
 
-			var headerBox = CreateHeader(dataStore);
-			root.Add(headerBox);
-
+			root.Add(CreateHeader(dataStore));
 			root.Add(CreateDataPreview(dataStore));
-
 
 			return root;
 		}
@@ -39,11 +37,11 @@ namespace PriosTools
 			container.Add(new Label("Data Preview")
 			{
 				style = {
-			unityFontStyleAndWeight = FontStyle.Bold,
-			marginTop = 10,
-			marginBottom = 4,
-			fontSize = 13
-		}
+					unityFontStyleAndWeight = FontStyle.Bold,
+					marginTop = 10,
+					marginBottom = 4,
+					fontSize = 13
+				}
 			});
 
 			foreach (var list in dataStore.TypedLists)
@@ -71,27 +69,27 @@ namespace PriosTools
 				var scroll = new ScrollView(ScrollViewMode.Horizontal)
 				{
 					style = {
-				maxHeight = 220,
-				flexGrow = 1,
-				borderTopLeftRadius = 4,
-				borderTopRightRadius = 4,
-				borderBottomLeftRadius = 4,
-				borderBottomRightRadius = 4,
-				borderBottomWidth = 1,
-				borderTopWidth = 1,
-				borderLeftWidth = 1,
-				borderRightWidth = 1,
-				backgroundColor = new Color(0.11f, 0.11f, 0.11f)
-			}
+						maxHeight = 220,
+						flexGrow = 1,
+						borderTopLeftRadius = 4,
+						borderTopRightRadius = 4,
+						borderBottomLeftRadius = 4,
+						borderBottomRightRadius = 4,
+						borderBottomWidth = 1,
+						borderTopWidth = 1,
+						borderLeftWidth = 1,
+						borderRightWidth = 1,
+						backgroundColor = new Color(0.11f, 0.11f, 0.11f)
+					}
 				};
 				foldout.Add(scroll);
 
 				var verticalStack = new VisualElement
 				{
 					style = {
-				flexDirection = FlexDirection.Column,
-				minWidth = totalWidth
-			}
+						flexDirection = FlexDirection.Column,
+						minWidth = totalWidth
+					}
 				};
 				scroll.Add(verticalStack);
 
@@ -99,11 +97,11 @@ namespace PriosTools
 				var header = new VisualElement
 				{
 					style = {
-				flexDirection = FlexDirection.Row,
-				backgroundColor = new Color(0.22f, 0.22f, 0.22f),
-				borderBottomWidth = 1,
-				borderBottomColor = new Color(0.3f, 0.3f, 0.3f)
-			}
+						flexDirection = FlexDirection.Row,
+						backgroundColor = new Color(0.22f, 0.22f, 0.22f),
+						borderBottomWidth = 1,
+						borderBottomColor = new Color(0.3f, 0.3f, 0.3f)
+					}
 				};
 
 				foreach (var field in fields)
@@ -111,13 +109,13 @@ namespace PriosTools
 					header.Add(new Label($"{GetPrettyTypeName(field.FieldType)} {field.Name.TrimEnd('_')}")
 					{
 						style = {
-					minWidth = ColumnMinWidth,
-					marginRight = 5,
-					paddingLeft = 4,
-					unityFontStyleAndWeight = FontStyle.Bold,
-					fontSize = 11,
-					color = Color.white
-				}
+							minWidth = ColumnMinWidth,
+							marginRight = 5,
+							paddingLeft = 4,
+							unityFontStyleAndWeight = FontStyle.Bold,
+							fontSize = 11,
+							color = Color.white
+						}
 					});
 				}
 				verticalStack.Add(header);
@@ -128,10 +126,10 @@ namespace PriosTools
 					var row = new VisualElement
 					{
 						style = {
-					flexDirection = FlexDirection.Row,
-					backgroundColor = i % 2 == 0
-						? new Color(0.16f, 0.16f, 0.16f)
-						: new Color(0.13f, 0.13f, 0.13f)                }
+							flexDirection = FlexDirection.Row,
+							backgroundColor = i % 2 == 0
+								? new Color(0.16f, 0.16f, 0.16f)
+								: new Color(0.13f, 0.13f, 0.13f)                }
 					};
 
 					// Optional: Hover highlight effect
@@ -152,14 +150,14 @@ namespace PriosTools
 						row.Add(new Label(FormatFieldValue(val))
 						{
 							style = {
-						minWidth = ColumnMinWidth,
-						marginRight = 5,
-						paddingLeft = 4,
-						unityTextAlign = TextAnchor.MiddleLeft,
-						whiteSpace = WhiteSpace.Normal,
-						fontSize = 11,
-						color = new Color(0.9f, 0.9f, 0.9f)
-					}
+								minWidth = ColumnMinWidth,
+								marginRight = 5,
+								paddingLeft = 4,
+								unityTextAlign = TextAnchor.MiddleLeft,
+								whiteSpace = WhiteSpace.Normal,
+								fontSize = 11,
+								color = new Color(0.9f, 0.9f, 0.9f)
+							}
 						});
 					}
 
@@ -175,24 +173,63 @@ namespace PriosTools
 		{
 			var container = PriosEditor.CreateBox();
 
+			// ▶️ First row: Data URL label + Source Type label
+			var labelRow = new VisualElement
+			{
+				style = {
+					flexDirection = FlexDirection.Row,
+					justifyContent = Justify.SpaceBetween,
+					marginBottom = 2,
+					marginLeft = 5,
+					marginRight = 5
+				}
+			};
+
 			var urlLabel = new Label("Data URL")
 			{
 				style = {
 					unityFontStyleAndWeight = FontStyle.Bold,
-					marginBottom = 2,
-					marginLeft = 5
+					fontSize = 12
 				}
 			};
 
+			var handlerLabel = new Label()
+			{
+				style = {
+					fontSize = 11,
+					color = new Color(0.7f, 0.7f, 0.7f),
+					unityTextAlign = TextAnchor.MiddleRight,
+					flexGrow = 1,
+					overflow = Overflow.Hidden,
+					textOverflow = TextOverflow.Ellipsis,
+					whiteSpace = WhiteSpace.NoWrap
+				}
+			};
+
+			// Initial handler type
+			var handler = dataStore.CurrentHandler;
+			handlerLabel.text = $"Source Type: {(handler?.SourceType ?? "Unknown")}";
+
+			labelRow.Add(urlLabel);
+			labelRow.Add(handlerLabel);
+			container.Add(labelRow);
+
+			// ▶️ URL Field
 			var urlField = new PropertyField(serializedObject.FindProperty("Url"))
 			{
-				label = "", // remove inline label
+				label = ""
 			};
 			urlField.style.marginRight = 5;
-
-			container.Add(urlLabel);
 			container.Add(urlField);
 
+			// ▶️ Update handler label when URL changes
+			urlField.RegisterValueChangeCallback(_ =>
+			{
+				var updatedHandler = dataStore.CurrentHandler;
+				handlerLabel.text = $"Source Type: {(updatedHandler?.SourceType ?? "Unknown")}";
+			});
+
+			// ▶️ Info Box
 			var infoBox = new HelpBox("", HelpBoxMessageType.Info)
 			{
 				style = { marginTop = 5, marginBottom = 5 }
@@ -211,7 +248,7 @@ namespace PriosTools
 						: $"{Mathf.FloorToInt((float)elapsed.TotalMinutes)} minutes ago";
 					infoBox.text = $"Last Downloaded: {localTime:yyyy-MM-dd HH:mm:ss}\n{agoText}";
 				}
-				else infoBox.text = "Insert a valid url to your google spreadsheet";
+				else infoBox.text = "Insert a valid URL to your data source";
 			}).Every(1000).StartingIn(0);
 
 			// Generate Button
@@ -221,24 +258,26 @@ namespace PriosTools
 				EditorUtility.DisplayDialog("Data Models Generated",
 					"Class files were generated successfully.\n\nPlease wait for Unity to recompile.\nAfter that, use 'Update Data' to populate the spreadsheet.",
 					"OK");
-			}, icon: AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/Editor/Icons/Tools.png"),
-				size: new Vector2(16, 16), tooltip: "Generate Data Models");
+			}, icon: LoadIcon("Tools"), size: new Vector2(16, 16), tooltip: "Generate Data Models");
 
 			// Clear Button
 			var clearBtn = PriosEditor.CreateButton(() =>
 			{
 				dataStore.ClearGeneratedData();
-				return System.Threading.Tasks.Task.CompletedTask;
-			}, icon: AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/Editor/Icons/Garbage-Closed.png"),
+				return Task.CompletedTask;
+			}, icon: LoadIcon("Garbage-Closed"),
 			tooltip: "Removes generated classes and cached spreadsheet data", size: new Vector2(16, 16));
 
 			// Edit Button
 			var editBtn = PriosEditor.CreateButton(() =>
 			{
-				Application.OpenURL(dataStore.Url);
-				return System.Threading.Tasks.Task.CompletedTask;
-			}, icon: AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/Editor/Icons/Pencil.png"),
-				size: new Vector2(16, 16), tooltip: "Open Spreadsheet in the editor");
+				if (dataStore.CurrentHandler != null)
+					dataStore.CurrentHandler.OpenInBrowser(dataStore.Url);
+				else
+					Debug.LogWarning("No handler found for current URL.");
+
+				return Task.CompletedTask;
+			}, icon: LoadIcon("Pencil"), size: new Vector2(16, 16), tooltip: "Open in external source");
 
 			// Refresh Button
 			var updateBtn = PriosEditor.CreateButton(async () =>
@@ -250,7 +289,7 @@ namespace PriosTools
 					? $"Successfully parsed and stored data for {count} sheet{plural}.\n\nYou can now use the data directly from the ScriptableObject."
 					: "No sheet data was found or applied.";
 				EditorUtility.DisplayDialog("Data Update Complete", message, "OK");
-			}, icon: AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/Editor/Icons/Refresh.png"),
+			}, icon: LoadIcon("Refresh"),
 				size: new Vector2(16, 16), tooltip: "Refresh Content Only");
 
 			var buttonRow = new VisualElement
@@ -267,6 +306,11 @@ namespace PriosTools
 			container.Add(buttonRow);
 
 			return container;
+		}
+
+		private Texture2D LoadIcon(string name)
+		{
+			return AssetDatabase.LoadAssetAtPath<Texture2D>($"Assets/Editor/Icons/{name}.png");
 		}
 
 		private static string FormatFieldValue(object value, int maxItems = 10)
