@@ -42,7 +42,16 @@ namespace PriosTools
 			}
 
 			_handlers[handler.SourceType] = handler;
-			UnityEngine.Debug.Log($"[PriosRegistry] Registered handler: {handler.SourceType}");
+			//UnityEngine.Debug.Log($"[PriosRegistry] Registered handler: {handler.SourceType}");
+			PriosDebugger.LogWithScript($"[PriosRegistry] Registered handler: {handler.SourceType}", handler.GetType());
+
+			//PriosDebugger.LogWithScript(
+			//	$"[PriosRegistry] Registered handler: {handler.SourceType}",
+			//	handler.GetType(),
+			//	nameof(IPriosDataSourceHandler.SourceType)
+			//);
+
+
 		}
 
 		public static IPriosDataSourceHandler GetHandlerForUrl(string url)

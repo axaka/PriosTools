@@ -147,30 +147,69 @@ namespace PriosTools
 			return (types, names);
 		}
 
+		public static string InferType(string value)
+		{
+			if (string.IsNullOrWhiteSpace(value))
+				return "string";
+
+			if (value.Contains(';'))
+			{
+				var elements = value.Split(';');
+				var inferred = elements.Select(InferType).Distinct().ToList();
+				string type = inferred.Count == 1 ? inferred[0] : "string";
+				return type == "string" ? "string[]" : $"{type}[]";
+			}
+
+			if (string.IsNullOrWhiteSpace(value)) return "string";
+
+			if (int.TryParse(value, out _)) return "int?";
+
+			value = value.Replace(",", ".");
+			bool isFloat = float.TryParse(value, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out _);
+			if (isFloat) return "float?";
+
+
+			if (bool.TryParse(value, out _)) return "bool?";
+			if (DateTime.TryParse(value, out _)) return "DateTime?";
+			return "string";
+		}
+
+		public static string InferTypeWithNullCheck(List<string> values)
+		{
+			var nonEmpty = values.Where(v => !string.IsNullOrWhiteSpace(v)).ToList();
+
+			if (nonEmpty.Count == 0)
+				return "string"; // default to string if no data
+
+			string baseType = PriosCsvTools.InferType(nonEmpty[0]);
+
+			// Check if all non-empty values match the base type
+			bool allMatch = nonEmpty.All(val => PriosCsvTools.InferType(val) == baseType);
+
+			bool hasEmpty = values.Any(v => string.IsNullOrWhiteSpace(v));
+
+			if (allMatch && hasEmpty && baseType != "string")
+				return baseType + "?"; // nullable value type
+
+			return baseType;
+		}
+
+
 		public static string ValidateName(string name, string fallback)
 		{
-			if (string.IsNullOrWhiteSpace(name))
-				return fallback;
+			if (string.IsNullOrWhiteSpace(name)) return fallback;
 
 			name = name.Trim().Trim(';');
-
 			var sb = new System.Text.StringBuilder();
 
-			// Ensure valid first character
 			if (!char.IsLetter(name[0]) && name[0] != '_')
 				sb.Append('_');
 
-			foreach (char c in name)
-			{
-				if (char.IsLetterOrDigit(c) || c == '_')
-					sb.Append(c);
-				else
-					sb.Append('_');
-			}
+			foreach (var c in name)
+				sb.Append(char.IsLetterOrDigit(c) || c == '_' ? c : '_');
 
-			string result = sb.ToString();
-
-			return string.IsNullOrWhiteSpace(result) ? fallback : result;
+			string final = sb.ToString();
+			return string.IsNullOrWhiteSpace(final) ? fallback : final;
 		}
 
 
