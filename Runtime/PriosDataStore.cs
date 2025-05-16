@@ -124,17 +124,26 @@ namespace PriosTools
 		{
 			if (Directory.Exists(_classDir))
 			{
+				var targetFileNames = _rawDataEntries
+					.Select(e => $"{_classPrefix}{e.Name.Replace(" ", "_")}.cs")
+					.ToHashSet(StringComparer.OrdinalIgnoreCase);
+
 				var files = Directory.GetFiles(_classDir, $"{_classPrefix}*.cs");
+
 				foreach (var file in files)
 				{
-					try
+					string fileName = Path.GetFileName(file);
+					if (targetFileNames.Contains(fileName))
 					{
-						File.Delete(file);
-						Debug.Log($"[PriosDataStore] 🧹 Deleted: {file}");
-					}
-					catch (Exception ex)
-					{
-						Debug.LogWarning($"[PriosDataStore] ❌ Failed to delete {file}: {ex.Message}");
+						try
+						{
+							File.Delete(file);
+							Debug.Log($"[PriosDataStore] 🧹 Deleted: {file}");
+						}
+						catch (Exception ex)
+						{
+							Debug.LogWarning($"[PriosDataStore] ❌ Failed to delete {file}: {ex.Message}");
+						}
 					}
 				}
 			}
@@ -150,6 +159,7 @@ namespace PriosTools
 			Debug.Log("[PriosDataStore] 🧼 Cleared generated data and metadata.");
 		}
 #endif
+
 
 		public void RehydrateFromCsvs()
 		{
