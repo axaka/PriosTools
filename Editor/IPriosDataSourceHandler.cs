@@ -10,7 +10,6 @@ namespace PriosTools
 		bool CanHandle(string url);
 		Task<List<PriosDataStore.RawDataEntry>> FetchDataAsync(string url);
 		void OpenInBrowser(string url);
-		Task<(List<string> types, List<string> names)> ExtractTypesAndNamesAsync(string csv);
 	}
 
 }

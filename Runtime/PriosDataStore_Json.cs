@@ -12,7 +12,7 @@ namespace PriosTools
 {
 	public class PriosDataStore_Json : IPriosDataSourceHandler
 	{
-		public string SourceType => ".json";
+		public string SourceType => "JSON";
 
 		public bool CanHandle(string url)
 		{
@@ -147,44 +147,5 @@ namespace PriosTools
 		{
 			Application.OpenURL(url);
 		}
-
-		public Task<(List<string> types, List<string> names)> ExtractTypesAndNamesAsync(string csv)
-		{
-			var parsed = PriosCsvTools.Parse(csv);
-			if (parsed.Count < 2)
-				return Task.FromResult((new List<string>(), new List<string>()));
-
-			var header = parsed[0];
-			var sampleRow = parsed[1];
-
-			var types = new List<string>();
-			var names = new List<string>();
-			var usedNames = new HashSet<string>();
-
-			for (int i = 0; i < header.Count; i++)
-			{
-				string raw = header[i].Trim();
-				string value = i < sampleRow.Count ? sampleRow[i].Trim() : "";
-				var columnValues = parsed.Skip(1).Select(row => i < row.Count ? row[i] : "").ToList();
-				string type = PriosCsvTools.InferTypeWithNullCheck(columnValues);
-				string name = PriosCsvTools.ValidateName(raw, $"Col{i}");
-
-				// Ensure uniqueness
-				string baseName = name;
-				int suffix = 1;
-				while (usedNames.Contains(name))
-					name = $"{baseName}_{suffix++}";
-
-				usedNames.Add(name);
-				types.Add(type);
-				names.Add(name);
-
-				Debug.Log($"[TypeInfer] {raw} → {name} : {value} => {type}");
-
-			}
-
-			return Task.FromResult((types, names));
-		}
-
 	}
 }

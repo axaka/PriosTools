@@ -125,27 +125,43 @@ namespace PriosTools
 			}).ToList();
 		}
 
-		public static (List<string> types, List<string> names) ExtractTypesAndNames(List<string> headerRow)
+		public static (List<string> types, List<string> names) ExtractTypesAndNames(List<string> headerRow, List<List<string>> dataRows)
 		{
 			var types = new List<string>();
 			var names = new List<string>();
+			var usedNames = new HashSet<string>();
 
 			for (int col = 0; col < headerRow.Count; col++)
 			{
-				string rawHeader = headerRow[col];
+				string rawHeader = headerRow[col]?.Trim() ?? "";
 				var (typeHint, namePart, _) = ParseTypeAndSeparator(rawHeader);
 
 				// Skip comment columns
 				if (typeHint == "#")
 					continue;
 
-				string validatedName = ValidateName(namePart, $"Col{col}");
-				types.Add(typeHint);
-				names.Add(validatedName);
+				string name = ValidateName(namePart, $"Col{col}");
+
+				// If type was not provided, infer it from the data
+				string type = string.IsNullOrWhiteSpace(typeHint) || typeHint == "string"
+					? InferTypeWithNullCheck(dataRows.Select(row => col < row.Count ? row[col] : "").ToList())
+					: typeHint;
+
+				// Ensure uniqueness
+				string baseName = name;
+				int suffix = 1;
+				while (usedNames.Contains(name))
+					name = $"{baseName}_{suffix++}";
+
+				usedNames.Add(name);
+				types.Add(type);
+				names.Add(name);
 			}
 
 			return (types, names);
 		}
+
+
 
 		public static string InferType(string value)
 		{
@@ -252,14 +268,28 @@ namespace PriosTools
 			if (string.IsNullOrWhiteSpace(value)) return Array.Empty<object>();
 			string baseType = type.Replace("[]", "").Replace("?", "");
 
-			return value
-				.Split(new[] { sep }, StringSplitOptions.None)
-				.Select(v =>
+			var elements = value.Split(new[] { sep }, StringSplitOptions.None);
+			var parsed = new List<object>();
+
+			foreach (var element in elements)
+			{
+				var trimmed = element.Trim();
+				if (string.IsNullOrWhiteSpace(trimmed)) continue;
+
+				var val = ParseSingleValue(baseType, trimmed);
+				if (val != null)
 				{
-					var parsed = ParseSingleValue(baseType, v.Trim());
-					return parsed;
-				}).ToArray();
+					parsed.Add(val);
+				}
+				else
+				{
+					Debug.LogWarning($"[ParseArrayValue] Skipping invalid '{trimmed}' for type '{baseType}'");
+				}
+			}
+
+			return parsed.ToArray();
 		}
+
 
 		private static object ParseSingleValue(string type, string value)
 		{
@@ -284,9 +314,71 @@ namespace PriosTools
 				case "DateTime":
 					return DateTime.TryParse(value, out var dt) ? dt : null;
 				case "Color":
-					return ColorUtility.TryParseHtmlString(value.StartsWith("#") ? value : "#" + value, out var color) ? color : null;
+					return ParseColor(value);
 				default: return value;
 			}
 		}
+
+		public static Color? ParseColor(string value)
+		{
+			if (string.IsNullOrWhiteSpace(value))
+				return null;
+
+			value = value.Trim().ToLowerInvariant();
+
+			// Try hex formats
+			if (ColorUtility.TryParseHtmlString(value.StartsWith("#") ? value : "#" + value, out var colorFromHex))
+				return colorFromHex;
+
+			// Try RGB or RGBA (e.g., "255,0,0" or "255,0,0,128")
+			var parts = value.Split(',');
+			if (parts.Length is 3 or 4 && parts.All(p => byte.TryParse(p.Trim(), out _)))
+			{
+				byte r = byte.Parse(parts[0].Trim());
+				byte g = byte.Parse(parts[1].Trim());
+				byte b = byte.Parse(parts[2].Trim());
+				byte a = parts.Length == 4 ? byte.Parse(parts[3].Trim()) : (byte)255;
+				return new Color32(r, g, b, a);
+			}
+
+			// Named colors
+			return value switch
+			{
+				"red" => Color.red,
+				"green" => Color.green,
+				"blue" => Color.blue,
+				"black" => Color.black,
+				"white" => Color.white,
+				"yellow" => Color.yellow,
+				"cyan" => Color.cyan,
+				"magenta" => Color.magenta,
+				"grey" or "gray" => Color.grey,
+				_ => null
+			};
+		}
+
+
+		public static bool HeaderLooksTyped(List<string> header)
+		{
+			return header.All(h => h.Trim().Contains(' '));
+		}
+
+		public static string ToCsv(List<List<string>> rows)
+		{
+			var sb = new StringBuilder();
+			foreach (var row in rows)
+			{
+				sb.AppendLine(string.Join(",", row.Select(EscapeCsv)));
+			}
+			return sb.ToString();
+		}
+
+		private static string EscapeCsv(string value)
+		{
+			if (value.Contains(",") || value.Contains("\"") || value.Contains("\n"))
+				return $"\"{value.Replace("\"", "\"\"")}\"";
+			return value;
+		}
+
 	}
 }

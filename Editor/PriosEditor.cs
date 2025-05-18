@@ -8,6 +8,11 @@ namespace PriosTools
 {
 	public static class PriosEditor
 	{
+		public static Texture2D LoadIconPng(string name)
+		{
+			return AssetDatabase.LoadAssetAtPath<Texture2D>($"Assets/Editor/Icons/{name}.png");
+		}
+
 		public static Box CreateBox(Color? color = null)
 		{
 			var connectionSection = new Box();

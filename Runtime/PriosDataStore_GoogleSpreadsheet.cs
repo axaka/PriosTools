@@ -44,11 +44,11 @@ namespace PriosTools
 						CSV = csv
 					});
 
-					Debug.Log($"✅ Downloaded: {name}");
+					Debug.Log($"Downloaded: {name}");
 				}
 				catch (Exception ex)
 				{
-					Debug.LogError($"❌ Failed to download {name}: {ex.Message}");
+					Debug.LogError($"Failed to download {name}: {ex.Message}");
 				}
 			}
 
@@ -77,11 +77,6 @@ namespace PriosTools
 		public void OpenInBrowser(string url)
 		{
 			Application.OpenURL(url);
-		}
-
-		public Task<(List<string> types, List<string> names)> ExtractTypesAndNamesAsync(string csv)
-		{
-			throw new NotImplementedException();
 		}
 	}
 }

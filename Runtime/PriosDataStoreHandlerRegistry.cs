@@ -9,6 +9,7 @@ namespace PriosTools
 	public static class PriosDataStoreHandlerRegistry
 	{
 		private static readonly Dictionary<string, IPriosDataSourceHandler> _handlers = new();
+		public static IEnumerable<string> AvailableTypes => _handlers.Keys;
 
 		static PriosDataStoreHandlerRegistry()
 		{
@@ -42,16 +43,7 @@ namespace PriosTools
 			}
 
 			_handlers[handler.SourceType] = handler;
-			//UnityEngine.Debug.Log($"[PriosRegistry] Registered handler: {handler.SourceType}");
 			PriosDebugger.LogWithScript($"[PriosRegistry] Registered handler: {handler.SourceType}", handler.GetType());
-
-			//PriosDebugger.LogWithScript(
-			//	$"[PriosRegistry] Registered handler: {handler.SourceType}",
-			//	handler.GetType(),
-			//	nameof(IPriosDataSourceHandler.SourceType)
-			//);
-
-
 		}
 
 		public static IPriosDataSourceHandler GetHandlerForUrl(string url)
@@ -68,6 +60,5 @@ namespace PriosTools
 		}
 
 
-		public static IEnumerable<string> AvailableTypes => _handlers.Keys;
 	}
 }

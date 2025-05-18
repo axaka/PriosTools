@@ -27,8 +27,8 @@ namespace PriosTools
 			}
 		}
 
-		[SerializeField] private long _lastHtmlDownloadTicks = 0;
-		public DateTime? LastDownloadedTime => _lastHtmlDownloadTicks > 0 ? new DateTime(_lastHtmlDownloadTicks, DateTimeKind.Utc) : null;
+		[SerializeField] private long _lastDownloadTicks = 0;
+		public DateTime? LastDownloadedTime => _lastDownloadTicks > 0 ? new DateTime(_lastDownloadTicks, DateTimeKind.Utc) : null;
 
 		[Serializable]
 		public struct RawDataEntry
@@ -93,16 +93,18 @@ namespace PriosTools
 				_rawDataEntries.Clear();
 				var entries = await handler.FetchDataAsync(Url);
 				_rawDataEntries.AddRange(entries);
-				_lastHtmlDownloadTicks = DateTime.UtcNow.Ticks;
+				_lastDownloadTicks = DateTime.UtcNow.Ticks;
 
 				foreach (var entry in _rawDataEntries)
 				{
 					var className = "PDS_" + entry.Name.Replace(" ", "_");
 					var parsed = PriosCsvTools.Parse(entry.CSV);
-					if (parsed.Count < 1) continue;
+					if (parsed.Count < 2) continue;
 
 					var header = parsed[0];
-					var (types, names) = PriosCsvTools.ExtractTypesAndNames(header);
+					var dataRows = parsed.Skip(1).ToList();
+
+					var (types, names) = PriosCsvTools.ExtractTypesAndNames(header, dataRows);
 
 					PriosCodeGenerator.GenerateCsClass(className, types, names);
 				}
@@ -117,6 +119,7 @@ namespace PriosTools
 			}
 		}
 #endif
+
 
 
 #if UNITY_EDITOR
@@ -152,7 +155,7 @@ namespace PriosTools
 			_typedLists.Clear();
 			_typedLookup.Clear();
 			SheetNames.Clear();
-			_lastHtmlDownloadTicks = 0;
+			_lastDownloadTicks = 0;
 
 			EditorUtility.SetDirty(this);
 			AssetDatabase.Refresh();
@@ -200,7 +203,7 @@ namespace PriosTools
 				_rawDataEntries.Clear();
 				var entries = await handler.FetchDataAsync(Url);
 				_rawDataEntries.AddRange(entries);
-				_lastHtmlDownloadTicks = DateTime.UtcNow.Ticks;
+				_lastDownloadTicks = DateTime.UtcNow.Ticks;
 
 				RehydrateFromCsvs();
 #if UNITY_EDITOR
