@@ -10,6 +10,7 @@ using System.Text;
 using System.Globalization;
 using System.Text.RegularExpressions;
 using UnityEditor;
+using System.Collections;
 
 namespace PriosTools
 {
@@ -17,15 +18,6 @@ namespace PriosTools
 	public class PriosDataStore : ScriptableObject
 	{
 		[SerializeField] public string Url = "";
-
-		public string SpreadsheetId
-		{
-			get
-			{
-				var match = Regex.Match(Url, @"^https:\/\/docs\.google\.com\/spreadsheets\/d\/([a-zA-Z0-9-_]+)", RegexOptions.IgnoreCase);
-				return match.Success ? match.Groups[1].Value : null;
-			}
-		}
 
 		[SerializeField] private long _lastDownloadTicks = 0;
 		public DateTime? LastDownloadedTime => _lastDownloadTicks > 0 ? new DateTime(_lastDownloadTicks, DateTimeKind.Utc) : null;
@@ -48,8 +40,8 @@ namespace PriosTools
 		private Dictionary<Type, object> _typedLookup = new();
 		public List<string> SheetNames = new();
 
-		private static readonly string _classDir = "Assets/Scripts/DataStoreClass/";
-		private static readonly string _classPrefix = "PDS_";
+		public static readonly string classDir = "Assets/Scripts/DataStoreClass/";
+		public static readonly string classPrefix = "PDS_";
 
 		private static List<IPriosDataSourceHandler> _handlers;
 		public IPriosDataSourceHandler CurrentHandler => 
@@ -125,13 +117,13 @@ namespace PriosTools
 #if UNITY_EDITOR
 		public void ClearGeneratedData()
 		{
-			if (Directory.Exists(_classDir))
+			if (Directory.Exists(classDir))
 			{
 				var targetFileNames = _rawDataEntries
-					.Select(e => $"{_classPrefix}{e.Name.Replace(" ", "_")}.cs")
+					.Select(e => $"{classPrefix}{e.Name.Replace(" ", "_")}.cs")
 					.ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-				var files = Directory.GetFiles(_classDir, $"{_classPrefix}*.cs");
+				var files = Directory.GetFiles(classDir, $"{classPrefix}*.cs");
 
 				foreach (var file in files)
 				{
@@ -172,7 +164,7 @@ namespace PriosTools
 
 			foreach (var entry in _rawDataEntries)
 			{
-				var className = _classPrefix + entry.Name.Replace(" ", "_");
+				var className = classPrefix + entry.Name.Replace(" ", "_");
 				Type type = GetGeneratedType(className);
 				if (type == null) continue;
 
@@ -227,16 +219,110 @@ namespace PriosTools
 #endif
 		}
 
-		public List<T> Get<T>() where T : PriosDataBaseNonGeneric
-		{
-			return _typedLookup.TryGetValue(typeof(T), out var val) ? (List<T>)val : new List<T>();
-		}
-
 		private static Type GetGeneratedType(string className)
 		{
 			return AppDomain.CurrentDomain.GetAssemblies()
 				.SelectMany(a => a.GetTypes())
 				.FirstOrDefault(t => t.Name == className && t.IsClass && !t.IsAbstract);
 		}
+
+		public List<T> Get<T>() where T : PriosDataBaseNonGeneric
+		{
+			return _typedLookup.TryGetValue(typeof(T), out var val) ? (List<T>)val : new List<T>();
+		}
+
+		// New method using string type name
+		public IList GetByTypeName(string typeName)
+		{
+			foreach (var pair in _typedLookup)
+			{
+				if (pair.Key.Name == typeName)
+				{
+					return (IList)pair.Value;
+				}
+			}
+
+			Debug.LogWarning($"Type '{typeName}' not found in PriosDataStore.");
+			return null;
+		}
+
+		// Get values for a specific field inside a specific type
+		public List<string> GetFieldValues(string typeName, string fieldName)
+		{
+			var result = new List<string>();
+
+			var list = GetByTypeName(typeName);
+			if (list == null)
+				return result;
+
+			foreach (var item in list)
+			{
+				var field = item.GetType().GetField(fieldName, BindingFlags.Public | BindingFlags.Instance);
+				if (field != null)
+				{
+					var value = field.GetValue(item)?.ToString();
+					result.Add(value);
+				}
+				else
+				{
+					Debug.LogWarning($"Field '{fieldName}' not found in type '{typeName}'.");
+					break;
+				}
+			}
+
+			return result;
+		}
+
+		public string GetFirstFieldValue(string typeName, string fieldName)
+		{
+			var list = GetByTypeName(typeName);
+			if (list == null || list.Count == 0)
+				return null;
+
+			var firstItem = list[0];
+			var field = firstItem.GetType().GetField(fieldName, BindingFlags.Public | BindingFlags.Instance);
+			if (field == null)
+			{
+				Debug.LogWarning($"Field '{fieldName}' not found in type '{typeName}'.");
+				return null;
+			}
+
+			return field.GetValue(firstItem)?.ToString();
+		}
+
+		/// <summary>
+		/// Gets a field's value from a specific entry by matching another field (e.g., find by Translation_Key).
+		/// </summary>
+		public string GetFieldValueByKey(string typeName, string matchFieldName, string matchValue, string targetFieldName)
+		{
+			var list = GetByTypeName(typeName);
+			if (list == null)
+				return null;
+
+			foreach (var item in list)
+			{
+				var type = item.GetType();
+
+				var matchField = type.GetField(matchFieldName, BindingFlags.Public | BindingFlags.Instance);
+				if (matchField == null) continue;
+
+				var fieldValue = matchField.GetValue(item)?.ToString();
+				if (fieldValue != matchValue) continue;
+
+				var targetField = type.GetField(targetFieldName, BindingFlags.Public | BindingFlags.Instance);
+				if (targetField == null)
+				{
+					Debug.LogWarning($"Target field '{targetFieldName}' not found in type '{typeName}'.");
+					return null;
+				}
+
+				return targetField.GetValue(item)?.ToString();
+			}
+
+			Debug.LogWarning($"No matching entry with {matchFieldName} = '{matchValue}' in type '{typeName}'.");
+			return null;
+		}
+
+
 	}
 }

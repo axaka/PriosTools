@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using UnityEditor;
 using UnityEngine;
@@ -80,6 +81,27 @@ namespace PriosTools
 			}
 
 			return button;
+		}
+
+		/// <summary>
+		/// Draws a dropdown for a string property using a provided list of options.
+		/// </summary>
+		/// <param name="label">Label to show next to the dropdown.</param>
+		/// <param name="property">The SerializedProperty (string) to edit.</param>
+		/// <param name="options">List of valid string options for the dropdown.</param>
+		public static void DrawDropdownFromList(string label, SerializedProperty property, List<string> options)
+		{
+			if (options == null || options.Count == 0)
+			{
+				EditorGUILayout.PropertyField(property);
+				EditorGUILayout.HelpBox("No options available for dropdown.", MessageType.Info);
+				return;
+			}
+
+			int currentIndex = Mathf.Max(0, options.IndexOf(property.stringValue));
+			int selectedIndex = EditorGUILayout.Popup(label, currentIndex, options.ToArray());
+
+			property.stringValue = options[selectedIndex];
 		}
 	}
 }
