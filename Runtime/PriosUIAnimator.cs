@@ -31,12 +31,9 @@ namespace PriosTools
 		public bool Showing => CanvasGroup.interactable;
 		public bool Running => _animationCoroutine != null;
 
-		private void Awake()
-		{
-			SetSlideDestination();
-		}
 		private void Start()
 		{
+			SetSlideDestination();
 			bool preventIfRunning = _preventIfRunning;
 			bool preventIfAlreadyCorrect = _preventIfAlreadyCorrect;
 
