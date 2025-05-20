@@ -267,18 +267,24 @@ namespace PriosTools
 					foreach (var field in fields)
 					{
 						object val = field.GetValue(items[i]);
-						row.Add(new Label(FormatFieldValue(val))
-						{
-							style = {
-								minWidth = ColumnMinWidth,
-								marginRight = 5,
-								paddingLeft = 4,
-								unityTextAlign = TextAnchor.MiddleLeft,
-								whiteSpace = WhiteSpace.Normal,
-								fontSize = 11,
-								color = new Color(0.9f, 0.9f, 0.9f)
-							}
-						});
+						var label = new Label(FormatFieldValue(val));
+						label.style.minWidth = ColumnMinWidth;
+						label.style.marginRight = 5;
+						label.style.paddingLeft = 4;
+						label.style.unityTextAlign = TextAnchor.UpperLeft;
+						label.style.fontSize = 11;
+						label.style.color = new Color(0.9f, 0.9f, 0.9f);
+						label.style.whiteSpace = WhiteSpace.Normal;
+						label.style.overflow = Overflow.Visible;
+						label.style.flexGrow = 1;
+						label.style.flexShrink = 1;
+						label.style.flexBasis = Length.Auto();
+						label.style.maxWidth = ColumnMinWidth; // ✅ prevents infinite horizontal growth
+						label.style.height = StyleKeyword.Auto; // ✅ allow vertical grow
+						label.style.unityOverflowClipBox = OverflowClipBox.PaddingBox; // ✅ avoids clipping
+						row.Add(label);
+
+
 					}
 
 					verticalStack.Add(row);
