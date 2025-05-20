@@ -11,7 +11,18 @@ namespace PriosTools
 	{
 		public static Texture2D LoadIconPng(string name)
 		{
-			return AssetDatabase.LoadAssetAtPath<Texture2D>($"Assets/Editor/Icons/{name}.png");
+			// 1. Check local dev path
+			string localPath = $"Assets/Editor/Icons/{name}.png";
+			var icon = AssetDatabase.LoadAssetAtPath<Texture2D>(localPath);
+			if (icon != null) return icon;
+
+			// 2. Check package path (adjust if your package name differs)
+			string packagePath = $"Packages/com.prios.priostools/Editor/Icons/{name}.png";
+			icon = AssetDatabase.LoadAssetAtPath<Texture2D>(packagePath);
+			if (icon != null) return icon;
+
+			Debug.LogWarning($"[PriosEditor] Icon not found: {name}.png");
+			return null;
 		}
 
 		public static Box CreateBox(Color? color = null)
