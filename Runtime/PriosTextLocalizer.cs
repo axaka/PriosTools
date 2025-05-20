@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
 
@@ -16,6 +17,7 @@ namespace PriosTools
 
 		private void Awake()
 		{
+			if (!IsValidInstance()) return;
 			EnsureComponent();
 			RegisterKeyChangeCallback();
 			UpdateText();
@@ -23,6 +25,7 @@ namespace PriosTools
 
 		private void OnEnable()
 		{
+			if (!IsValidInstance()) return;
 			EnsureComponent();
 			RegisterKeyChangeCallback();
 			UpdateText();
@@ -30,15 +33,16 @@ namespace PriosTools
 
 		private void OnDisable()
 		{
+			if (!IsValidInstance()) return;
 			UnregisterKeyChangeCallback();
 		}
 
 #if UNITY_EDITOR
 		private void OnValidate()
 		{
+			if (!IsValidInstance()) return;
 			EnsureComponent();
 
-			// Make sure we update when modified in Editor
 			if (!Application.isPlaying)
 				UpdateText();
 		}
@@ -46,35 +50,74 @@ namespace PriosTools
 
 		private void EnsureComponent()
 		{
-			if (textComponent == null)
-				textComponent = GetComponent<TMP_Text>();
+			if (this == null || textComponent != null)
+				return;
+
+			textComponent = GetComponent<TMP_Text>();
 		}
+
+		private bool IsValidInstance()
+		{
+			return this != null && gameObject != null;
+		}
+
+		private readonly List<string> watchedKeys = new();
 
 		private void RegisterKeyChangeCallback()
 		{
-			if (Application.isPlaying && userData != null && !string.IsNullOrEmpty("Language"))
+			if (userData == null || dataStore == null || string.IsNullOrEmpty(sheet) || string.IsNullOrEmpty(key))
+				return;
+
+			UnregisterKeyChangeCallback(); // Clear old keys
+
+			// Get the current language
+			string lang = userData.Get("Language");
+			string rawText = dataStore.GetFieldValueByKey(sheet, "Key", key, lang);
+
+			if (!string.IsNullOrEmpty(rawText))
 			{
-				userData.RegisterOnChange("Language", OnLanguageChanged);
+				var matches = System.Text.RegularExpressions.Regex.Matches(rawText, @"\{([^\{\}]+)\}");
+				foreach (System.Text.RegularExpressions.Match match in matches)
+				{
+					string watchKey = match.Groups[1].Value;
+					if (!string.IsNullOrEmpty(watchKey))
+					{
+						userData.RegisterOnChange(watchKey, OnWatchedKeyChanged);
+						watchedKeys.Add(watchKey);
+					}
+				}
 			}
+
+			// Always also watch for language changes
+			userData.RegisterOnChange("Language", OnWatchedKeyChanged);
+			watchedKeys.Add("Language");
 		}
 
 		private void UnregisterKeyChangeCallback()
 		{
-			if (userData != null)
+			if (userData == null) return;
+
+			foreach (var key in watchedKeys)
 			{
-				userData.UnregisterOnChange("Language", OnLanguageChanged);
+				userData.UnregisterOnChange(key, OnWatchedKeyChanged);
 			}
+			watchedKeys.Clear();
 		}
 
-		private void OnLanguageChanged(string newValue)
+		private void OnWatchedKeyChanged(string _)
 		{
 			UpdateText();
 		}
 
-
 		public void UpdateText()
 		{
+			if (!IsValidInstance())
+				return;
+
 			EnsureComponent();
+
+			if (textComponent == null)
+				return;
 
 			if (dataStore == null || userData == null)
 			{
@@ -99,18 +142,12 @@ namespace PriosTools
 
 			if (!string.IsNullOrEmpty(localizedText))
 			{
-				localizedText = ReplacePlaceholders(localizedText);
-				textComponent.text = localizedText;
+				textComponent.text = ReplacePlaceholders(localizedText);
 			}
 			else
 			{
 				textComponent.text = $"[{key}]";
 			}
-
-
-			//textComponent.text = !string.IsNullOrEmpty(localizedText)
-			//	? localizedText
-			//	: $"[{key}]";
 		}
 
 		private string ReplacePlaceholders(string text)
@@ -118,13 +155,12 @@ namespace PriosTools
 			if (string.IsNullOrEmpty(text) || userData == null)
 				return text;
 
-			// Matches {SomeKey} anywhere in the string
 			var matches = System.Text.RegularExpressions.Regex.Matches(text, @"\{([^\{\}]+)\}");
 
 			foreach (System.Text.RegularExpressions.Match match in matches)
 			{
-				string placeholder = match.Groups[0].Value; // e.g., "{User}"
-				string key = match.Groups[1].Value;         // e.g., "User"
+				string placeholder = match.Groups[0].Value;
+				string key = match.Groups[1].Value;
 				string replacement = userData.Get(key);
 
 				if (!string.IsNullOrEmpty(replacement))
@@ -135,6 +171,5 @@ namespace PriosTools
 
 			return text;
 		}
-
 	}
 }

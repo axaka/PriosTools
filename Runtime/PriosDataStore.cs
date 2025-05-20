@@ -37,7 +37,8 @@ namespace PriosTools
 		[SerializeField] private List<object> _typedLists = new();
 		public IEnumerable<object> TypedLists => _typedLists;
 
-		private Dictionary<Type, object> _typedLookup = new();
+		public Dictionary<Type, object> TypedLookup { get; private set; } = new();
+
 		public List<string> SheetNames = new();
 
 		public static readonly string classDir = "Assets/Scripts/DataStoreClass/";
@@ -145,7 +146,7 @@ namespace PriosTools
 
 			_rawDataEntries.Clear();
 			_typedLists.Clear();
-			_typedLookup.Clear();
+			TypedLookup.Clear();
 			SheetNames.Clear();
 			_lastDownloadTicks = 0;
 
@@ -159,7 +160,7 @@ namespace PriosTools
 		public void RehydrateFromCsvs()
 		{
 			_typedLists.Clear();
-			_typedLookup.Clear();
+			TypedLookup.Clear();
 			SheetNames.Clear();
 
 			foreach (var entry in _rawDataEntries)
@@ -212,7 +213,7 @@ namespace PriosTools
 
 		public void SetData<T>(List<T> list)
 		{
-			_typedLookup[typeof(T)] = list;
+			TypedLookup[typeof(T)] = list;
 #if UNITY_EDITOR
 			if (!_typedLists.Contains(list))
 				_typedLists.Add(list);
@@ -228,13 +229,13 @@ namespace PriosTools
 
 		public List<T> Get<T>() where T : PriosDataBaseNonGeneric
 		{
-			return _typedLookup.TryGetValue(typeof(T), out var val) ? (List<T>)val : new List<T>();
+			return TypedLookup.TryGetValue(typeof(T), out var val) ? (List<T>)val : new List<T>();
 		}
 
 		// New method using string type name
 		public IList GetByTypeName(string typeName)
 		{
-			foreach (var pair in _typedLookup)
+			foreach (var pair in TypedLookup)
 			{
 				if (pair.Key.Name == typeName)
 				{
