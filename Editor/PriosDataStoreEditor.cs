@@ -212,7 +212,7 @@ namespace PriosTools
 				var scroll = new ScrollView(ScrollViewMode.Horizontal)
 				{
 					style = {
-						maxHeight = 220,
+						//maxHeight = 220,
 						flexGrow = 1,
 						backgroundColor = new Color(0.11f, 0.11f, 0.11f)
 					}
@@ -258,6 +258,9 @@ namespace PriosTools
 					{
 						style = {
 							flexDirection = FlexDirection.Row,
+							flexWrap = Wrap.Wrap,
+							flexGrow = 1,
+							overflow = Overflow.Visible,
 							backgroundColor = i % 2 == 0
 								? new Color(0.16f, 0.16f, 0.16f)
 								: new Color(0.13f, 0.13f, 0.13f)
