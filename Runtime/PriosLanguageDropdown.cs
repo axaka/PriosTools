@@ -21,8 +21,16 @@ namespace PriosTools
 			EnsureDropdown();
 			InitializeOptions();
 			ApplySavedSelection();
-			RegisterEvents();
+
+			dropdown.onValueChanged.AddListener(OnLanguageChanged);
 		}
+
+		private void OnDestroy()
+		{
+			if (dropdown != null)
+				dropdown.onValueChanged.RemoveListener(OnLanguageChanged);
+		}
+
 
 #if UNITY_EDITOR
 		public void OnValidate()
@@ -43,7 +51,7 @@ namespace PriosTools
 
 		private void InitializeOptions()
 		{
-			if (dropdown == null || userData == null || dataStore == null) return;
+			if (!this || dropdown == null || userData == null || dataStore == null) return;
 
 			var langs = GetLanguageColumnsFromTypeName(dataStoreSheet);
 
@@ -53,7 +61,7 @@ namespace PriosTools
 
 		private void ApplySavedSelection()
 		{
-			if (dropdown == null || userData == null || dataStore == null) return;
+			if (!this || dropdown == null || userData == null || dataStore == null) return;
 
 			string savedValue = userData.Get(userDataKey);
 			if (string.IsNullOrEmpty(savedValue)) return;
@@ -73,16 +81,9 @@ namespace PriosTools
 				dropdown.SetValueWithoutNotify(index);
 		}
 
-
-		private void RegisterEvents()
-		{
-			dropdown.onValueChanged.AddListener(OnLanguageChanged);
-		}
-
 		private void OnLanguageChanged(int index)
 		{
-			if (userData == null || userData == null || index < 0)
-				return;
+			if (!this || dropdown == null || userData == null || dataStore == null) return;
 
 			string selectedLang = dropdown.options[index].text;
 			userData.Set(userDataKey, selectedLang);
@@ -104,15 +105,20 @@ namespace PriosTools
 				return new List<string>();
 			}
 
-			return match
-				.GetFields(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance)
-				.Skip(1) // ✅ skip first field (likely 'Key')
-				.Select(f => f.Name)
-				.ToList();
+			try
+			{
+				return match
+					.GetFields(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance)
+					.Skip(1)
+					.Select(f => f.Name)
+					.ToList();
+			}
+			catch (System.Exception ex)
+			{
+				Debug.LogError($"Error reflecting language columns from type '{typeName}': {ex.Message}");
+				return new List<string>();
+			}
+
 		}
-
-
-
-
 	}
 }

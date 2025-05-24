@@ -1,6 +1,9 @@
 using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
+#if UNITY_EDITOR
+using UnityEditor;
+#endif
 
 namespace PriosTools
 {
@@ -37,24 +40,24 @@ namespace PriosTools
 			UnregisterKeyChangeCallback();
 		}
 
-#if UNITY_EDITOR
 		private void OnValidate()
 		{
 			if (!IsValidInstance()) return;
 			EnsureComponent();
 
 			if (!Application.isPlaying)
-				UpdateText();
+				EditorApplication.delayCall += () =>
+				{
+					if (this) UpdateText();
+				};
 		}
-#endif
 
 		private void EnsureComponent()
 		{
-			if (this == null || textComponent != null)
-				return;
-
-			textComponent = GetComponent<TMP_Text>();
+			if (textComponent == null)
+				textComponent = GetComponent<TMP_Text>();
 		}
+
 
 		private bool IsValidInstance()
 		{

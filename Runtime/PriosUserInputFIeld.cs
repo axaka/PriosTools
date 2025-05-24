@@ -58,7 +58,7 @@ namespace PriosTools
 
 		private bool IsValid()
 		{
-			return this != null && gameObject != null;
+			return this;
 		}
 
 		private void InitializeInput()

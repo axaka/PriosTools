@@ -52,6 +52,8 @@ namespace PriosTools
 		}
 		public void SetSlideDestination(Vector2? position)
 		{
+			if (!this) return;
+
 			_slideDestination = position;
 		}
 
@@ -69,6 +71,8 @@ namespace PriosTools
 		PriosUIAnimatorData.AnimationType animationType,
 		PriosUIAnimatorData.SlideDirection slideDirection)
 		{
+			if (!this) return 0.0f;
+
 			if (_preventIfRunning && Running)
 			{
 				return 0.0f;
