@@ -49,5 +49,11 @@ namespace PriosTools
 				Destroy(gameObject);
 			}
 		}
+
+		protected virtual void OnApplicationQuit()
+		{
+			Destroy(gameObject); // Or set instance to null
+		}
+
 	}
 }
