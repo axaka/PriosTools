@@ -1,0 +1,8 @@
+{
+  "name": "PriosTools.Editor",
+  "references": [
+    "PriosTools"
+  ],
+  "includePlatforms": ["Editor"],
+  "autoReferenced": true
+}

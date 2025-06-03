@@ -1,0 +1,27 @@
+{
+  "name": "com.axaka.priostools",
+  "version": "1.0.0",
+  "displayName": "Prios Tools",
+  "description": "A reusable Unity tooling package designed for use across multiple projects. Includes editor utilities, runtime helpers, and Prios-specific features.",
+  "unity": "2022.3",
+  "author": {
+    "name": "Martin Vadseth Høiby (Axaka)",
+    "email": "mvhoiby@gmail.com",
+    "url": "https://github.com/axaka"
+  },
+  "keywords": [
+    "unity",
+    "tools",
+    "editor",
+    "priostools",
+    "utilities"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/axaka/PriosTools.git"
+  },
+  "dependencies": {
+    "com.unity.textmeshpro": "3.0.9"
+  }
+}

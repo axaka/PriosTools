@@ -1,0 +1,9 @@
+.emoji-font {
+    font-size: 12px;
+}
+
+.wrap {
+  white-space: normal;
+  overflow-wrap: break-word;
+  word-break: break-word;
+}

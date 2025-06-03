@@ -1,0 +1,8 @@
+{
+  "name": "PriosTools",
+  "rootNamespace": "PriosTools",
+  "references": [
+    "Unity.TextMeshPro"
+  ],
+  "autoReferenced": true
+}
