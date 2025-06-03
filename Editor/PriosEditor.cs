@@ -17,7 +17,7 @@ namespace PriosTools
 			if (icon != null) return icon;
 
 			// 2. Check package path (adjust if your package name differs)
-			string packagePath = $"Packages/com.prios.priostools/PriosTools/Editor/Icons/{name}.png";
+			string packagePath = $"Packages/com.axaka.priostools/Editor/Icons/{name}.png";
 			icon = AssetDatabase.LoadAssetAtPath<Texture2D>(packagePath);
 			if (icon != null) return icon;
 
