@@ -14,6 +14,9 @@
 - **🌍 Localization System**
   - Spreadsheet-based translations.
   - Dynamic placeholders (e.g., player name).
+  - **Optional Typewriter Effect**:
+    - Show text character-by-character with rich text and sound support.
+    - Includes randomized pitch/audio variation and a `FinishTyping()` API.
 
 - **⚡ Event System**
   - Decouple logic using `PriosEvents`, `PriosEventTrigger`, `PriosEventListener`.

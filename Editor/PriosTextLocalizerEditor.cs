@@ -34,8 +34,22 @@ namespace PriosTools
 			var keyOptions = localizer.dataStore.GetFieldValues(sheetProp.stringValue, "Key");
 			PriosEditor.DrawDropdownFromList("Key", keyProp, keyOptions);
 
+			EditorGUILayout.Space(10f);
 
-			serializedObject.ApplyModifiedProperties();
+			EditorGUILayout.PropertyField(serializedObject.FindProperty("useTypewriterEffect"));
+
+			if (localizer.useTypewriterEffect)
+			{
+				EditorGUILayout.PropertyField(serializedObject.FindProperty("supportRichText"));
+				EditorGUILayout.PropertyField(serializedObject.FindProperty("typewriterSpeed"));
+
+				EditorGUILayout.PropertyField(serializedObject.FindProperty("characterSounds"), true);
+				if (localizer.characterSounds != null && localizer.characterSounds.Length > 0)
+				{
+					EditorGUILayout.PropertyField(serializedObject.FindProperty("pitchRange"));
+				}
+
+			}
 
 			EditorGUILayout.Space(10f);
 
@@ -51,6 +65,7 @@ namespace PriosTools
 				}
 			}
 
+			serializedObject.ApplyModifiedProperties();
 		}
 	}
 }
