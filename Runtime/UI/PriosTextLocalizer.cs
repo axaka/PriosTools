@@ -158,21 +158,18 @@ private void OnValidate()
 
 		public void SetKeyAndShow(string newKey)
 		{
-			key = newKey;
 			currentLineIndex = 0;
 			isSpeedingUp = false;
 			isTypingInitialBlock = false;
 
-			if (typewriterCoroutine != null)
-			{
-				StopCoroutine(typewriterCoroutine);
-				typewriterCoroutine = null;
-			}
+			StopAllCoroutines();
+			typewriterCoroutine = null;
 
 			visibleLines.Clear();
 			textLines.Clear();
 			textComponent.text = "";
 
+			key = newKey;
 			UpdateText();
 		}
 
