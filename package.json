@@ -1,6 +1,6 @@
 {
   "name": "com.axaka.priostools",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "displayName": "Prios Tools",
   "description": "A reusable Unity tooling package designed for use across multiple projects. Includes editor utilities, runtime helpers, and Prios-specific features.",
   "unity": "2022.3",

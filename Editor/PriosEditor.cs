@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using UnityEditor;
 using UnityEngine;
@@ -16,7 +17,7 @@ namespace PriosTools
 			var icon = AssetDatabase.LoadAssetAtPath<Texture2D>(localPath);
 			if (icon != null) return icon;
 
-			// 2. Check package path (adjust if your package name differs)
+			// 2. Check package path
 			string packagePath = $"Packages/com.axaka.priostools/Editor/Icons/{name}.png";
 			icon = AssetDatabase.LoadAssetAtPath<Texture2D>(packagePath);
 			if (icon != null) return icon;
@@ -124,6 +125,89 @@ namespace PriosTools
 			// Only update if index is valid
 			if (selectedIndex >= 0 && selectedIndex < options.Count)
 				property.stringValue = options[selectedIndex];
+		}
+
+		/// <summary>
+		/// Draws a text field with auto-complete suggestions from a list.
+		/// </summary>
+		/// <param name="label">The label to show.</param>
+		/// <param name="property">The string property to edit.</param>
+		/// <param name="options">List of possible autocomplete options.</param>
+		/// <param name="maxSuggestions">How many suggestions to show (default 10).</param>
+		public static void DrawAutocompleteField(string label, SerializedProperty property, List<string> options, int maxSuggestions = 10)
+		{
+			if (property == null)
+			{
+				EditorGUILayout.HelpBox("SerializedProperty is null.", MessageType.Error);
+				return;
+			}
+
+			string currentInput = property.stringValue ?? "";
+			string newInput = EditorGUILayout.TextField(label, currentInput);
+
+			// Update property if changed
+			if (newInput != currentInput)
+			{
+				property.stringValue = newInput;
+			}
+
+			if (!string.IsNullOrEmpty(newInput) && options != null && options.Count > 0)
+			{
+				var matches = options
+					.Where(k => k.IndexOf(newInput, StringComparison.OrdinalIgnoreCase) >= 0)
+					.Take(maxSuggestions)
+					.ToList();
+
+				if (matches.Count > 0)
+				{
+					GUILayout.BeginVertical("box");
+					foreach (string match in matches)
+					{
+						if (GUILayout.Button(match, EditorStyles.miniButton))
+						{
+							property.stringValue = match;
+							GUI.FocusControl(null); // defocus to apply
+						}
+					}
+					GUILayout.EndVertical();
+				}
+			}
+		}
+
+		public static void DrawAutocompleteFieldInline(SerializedProperty property, List<string> options, string hint = "Type to search...")
+		{
+			string currentValue = property.stringValue ?? "";
+
+			EditorGUI.BeginChangeCheck();
+			string newValue = EditorGUILayout.TextField(currentValue, GUI.skin.textField);
+
+			if (EditorGUI.EndChangeCheck())
+				property.stringValue = newValue;
+
+			// Only show suggestions if text partially matches and is not exact
+			if (!string.IsNullOrEmpty(newValue) && !options.Contains(newValue))
+			{
+				var filtered = options
+					.Where(opt => opt.IndexOf(newValue, System.StringComparison.OrdinalIgnoreCase) >= 0)
+					.Take(10) // limit for performance
+					.ToList();
+
+				if (filtered.Count > 0)
+				{
+					EditorGUILayout.BeginVertical("box");
+					EditorGUILayout.LabelField(hint, EditorStyles.miniLabel);
+					foreach (var match in filtered)
+					{
+						if (GUILayout.Button(match, EditorStyles.miniButton))
+						{
+							property.stringValue = match;
+							GUI.FocusControl(null);
+							break;
+						}
+					}
+					EditorGUILayout.EndVertical();
+				}
+			}
 		}
 
 	}

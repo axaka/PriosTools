@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),  
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.1] - 2025-06-11
+
+### Improved
+- **Key Selector UI**:
+  - Replaced dropdown with a **searchable autocomplete input field** for selecting localization keys.
+  - Suggestions update live as you type, making it much faster to navigate large key sets.
+  - **Current selection is hidden** from suggestions to reduce clutter.
+  - Input and label are now displayed **inline** for a cleaner layout.
+  - Includes a `"— None —"` option to clear the key assignment.
+
+
 ## [1.1.0] - 2025-06-11
 
 ### Added

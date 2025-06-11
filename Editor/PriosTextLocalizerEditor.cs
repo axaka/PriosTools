@@ -31,13 +31,19 @@ namespace PriosTools
 				.ToList();
 			PriosEditor.DrawDropdownFromList("Sheet", sheetProp, sheetOptions);
 
-			// Key dropdown
+			// Key input with inline autocomplete
 			var keyProp = serializedObject.FindProperty("key");
-			var keyOptions = localizer.dataStore.GetFieldValues(sheetProp.stringValue, "Key");
-			PriosEditor.DrawDropdownFromList("Key", keyProp, keyOptions);
+			var rawKeys = localizer.dataStore.GetFieldValues(sheetProp.stringValue, "Key").ToList();
+
+			// Remove already selected key from suggestions
+			var suggestions = rawKeys.Where(k => k != keyProp.stringValue).ToList();
+
+			EditorGUILayout.BeginHorizontal();
+			EditorGUILayout.LabelField("Key", GUILayout.Width(EditorGUIUtility.labelWidth - 4));
+			PriosEditor.DrawAutocompleteFieldInline(keyProp, suggestions, hint: "Start typing to filter keys...");
+			EditorGUILayout.EndHorizontal();
 
 			EditorGUILayout.Space(10f);
-
 			EditorGUILayout.PropertyField(serializedObject.FindProperty("useTypewriterEffect"));
 
 			if (localizer.useTypewriterEffect)
@@ -50,11 +56,9 @@ namespace PriosTools
 				{
 					EditorGUILayout.PropertyField(serializedObject.FindProperty("pitchRange"));
 				}
-
 			}
 
 			EditorGUILayout.Space(10f);
-
 			EditorGUILayout.PropertyField(serializedObject.FindProperty("enablePagination"));
 
 			if (localizer.enablePagination)
@@ -69,7 +73,6 @@ namespace PriosTools
 			}
 
 			EditorGUILayout.Space(10f);
-
 			if (GUILayout.Button("Update Text"))
 			{
 				localizer.UpdateText();
@@ -80,9 +83,6 @@ namespace PriosTools
 					SceneView.RepaintAll();
 				}
 			}
-
-			// For debugging
-			// EditorGUILayout.PropertyField(serializedObject.FindProperty("textLines"));
 
 			serializedObject.ApplyModifiedProperties();
 		}
