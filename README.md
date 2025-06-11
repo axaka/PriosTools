@@ -14,9 +14,13 @@
 - **🌍 Localization System**
   - Spreadsheet-based translations.
   - Dynamic placeholders (e.g., player name).
-  - **Optional Typewriter Effect**:
-    - Show text character-by-character with rich text and sound support.
-    - Includes randomized pitch/audio variation and a `FinishTyping()` API.
+  - **Typewriter Effect** (fully featured):
+    - Displays text character-by-character with **rich text preservation**.
+    - Supports audio clips per character with **randomized pitch and clip selection**.
+    - Customizable punctuation timing (e.g., commas and periods cause pauses).
+    - User interaction with `Continue()` to advance lines or speed up typing.
+    - Supports **pagination**, line wrapping, and bounds-based truncation.
+    - Clean public API: `SetKeyAndShow()`, `Continue()`, `IsTyping`, `IsComplete`, etc.
 
 - **⚡ Event System**
   - Decouple logic using `PriosEvents`, `PriosEventTrigger`, `PriosEventListener`.
@@ -31,6 +35,7 @@
   - Press `F9` in any scene (even in builds) to:
     - View/edit save data.
     - Switch scenes.
+    - Integrated via `PriosLinkData`.
 
 - **🔁 Singleton Helper**
   - Easy global access with `PriosSingleton`.
