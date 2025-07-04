@@ -11,16 +11,21 @@
   - Auto-generate C# classes.
   - Supports runtime reloading — no need to rebuild for content fixes.
 
-- **🌍 Localization System**
+**🌍 Localization System**
   - Spreadsheet-based translations.
   - Dynamic placeholders (e.g., player name).
   - **Typewriter Effect** (fully featured):
-    - Displays text character-by-character with **rich text preservation**.
-    - Supports audio clips per character with **randomized pitch and clip selection**.
-    - Customizable punctuation timing (e.g., commas and periods cause pauses).
-    - User interaction with `Continue()` to advance lines or speed up typing.
-    - Supports **pagination**, line wrapping, and bounds-based truncation.
-    - Clean public API: `SetKeyAndShow()`, `Continue()`, `IsTyping`, `IsComplete`, etc.
+  - Always shows full text when both typewriter and pagination are off.
+  - Honor pagination flag even in the editor preview (`TruncateTextInEditor`).
+  - Forces layout rebuild under layout groups so wrapping/pagination works immediately.
+  - Displays text character-by-character with **rich text preservation**.
+  - Public API:
+  - `TryContinue()` returns success/failure and `Continue()` (void) for button binding.
+  - Supports audio clips per character with **randomized pitch and clip selection**.
+  - Customizable punctuation timing (e.g., commas and periods cause pauses).
+  - User interaction with `Continue()` to advance lines or speed up typing.
+  - Supports **pagination**, line wrapping, and bounds-based truncation.
+  - Clean public API: `SetKeyAndShow()`, `Continue()`, `IsTyping`, `IsComplete`, etc.
 
 - **⚡ Event System**
   - Decouple logic using `PriosEvents`, `PriosEventTrigger`, `PriosEventListener`.

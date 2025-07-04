@@ -5,6 +5,7 @@ using System.Text.RegularExpressions;
 using System.Linq;
 using TMPro;
 using UnityEngine;
+using UnityEngine.UI;
 
 #if UNITY_EDITOR
 using UnityEditor;
@@ -27,8 +28,6 @@ namespace PriosTools
 		public bool enablePagination = true;
 		public bool autoDetectBounds = true;
 		public float maxHeight = 500f;
-		private bool isSpeedingUp = false;
-		private bool isTypingInitialBlock = false;
 
 		public bool scrollOneLineAtATime = true;
 
@@ -43,6 +42,8 @@ namespace PriosTools
 		private List<string> visibleLines = new();
 		private int maxVisibleLines = 1;
 		private int currentLineIndex = 0;
+		private bool isSpeedingUp = false;
+		private bool isTypingInitialBlock = false;
 
 		private static readonly Regex PlaceholderRegex = new(@"\{([^\{\}]+)\}", RegexOptions.Compiled);
 
@@ -52,7 +53,10 @@ namespace PriosTools
 		{
 			EnsureComponent();
 			RegisterKeyCallback();
-			UpdateText();
+#if UNITY_EDITOR
+			if (!Application.isPlaying)
+				UpdateText();
+#endif
 		}
 
 		private void OnEnable()
@@ -67,21 +71,35 @@ namespace PriosTools
 			UnregisterKeyCallback();
 		}
 
-#if UNITY_EDITOR
-private void OnValidate()
-{
-	if (!IsValidInstance()) return;
-	EnsureComponent();
-
-	if (!EditorApplication.isPlayingOrWillChangePlaymode)
-	{
-		EditorApplication.delayCall += () =>
+		private void Start()
 		{
-			if (this != null && !Application.isPlaying)
-				UpdateText();
-		};
-	}
-}
+			UpdateText();
+			//if (Application.isPlaying)
+			//	StartCoroutine(DelayedTextUpdate());
+		}
+
+		private IEnumerator DelayedTextUpdate()
+		{
+			yield return null; // Wait one frame
+			UpdateText();
+		}
+
+
+#if UNITY_EDITOR
+		private void OnValidate()
+		{
+			if (!IsValidInstance()) return;
+			EnsureComponent();
+
+			if (!EditorApplication.isPlayingOrWillChangePlaymode)
+			{
+				EditorApplication.delayCall += () =>
+				{
+					if (this != null && !Application.isPlaying)
+						UpdateText();
+				};
+			}
+		}
 #else
         private void OnValidate()
         {
@@ -162,7 +180,7 @@ private void OnValidate()
 			isSpeedingUp = false;
 			isTypingInitialBlock = false;
 
-			StopAllCoroutines();
+			//StopAllCoroutines();
 			typewriterCoroutine = null;
 
 			visibleLines.Clear();
@@ -175,6 +193,8 @@ private void OnValidate()
 
 		public void UpdateText()
 		{
+			StopAllCoroutines();
+
 			if (textComponent == null || dataStore == null || userData == null || string.IsNullOrEmpty(sheet) || string.IsNullOrEmpty(key))
 			{
 				textComponent.text = "[Missing Configuration]";
@@ -198,8 +218,21 @@ private void OnValidate()
 				return;
 			}
 #endif
-			GenerateTextLines(finalText);
-			ShowInitialLinesTyped();
+
+			// Force layout rebuild before measuring text height
+			Canvas.ForceUpdateCanvases();
+			LayoutRebuilder.ForceRebuildLayoutImmediate(textComponent.rectTransform);
+
+			if (!enablePagination && !useTypewriterEffect)
+			{
+				textComponent.text = finalText;
+				currentLineIndex = textLines.Count;
+			}
+			else
+			{
+				GenerateTextLines(finalText);
+				ShowInitialLinesTyped();
+			}
 		}
 
 		private void GenerateTextLines(string fullText)
@@ -281,10 +314,13 @@ private void OnValidate()
 			textComponent.text = "";
 			currentLineIndex = 0;
 
-			if (useTypewriterEffect)
+			if (useTypewriterEffect && Application.isPlaying)
 			{
 				// Pre-fill with empty lines to reserve visual space
-				int initialCount = Mathf.Min(maxVisibleLines, textLines.Count);
+				int initialCount = enablePagination
+					? Mathf.Min(maxVisibleLines, textLines.Count)
+					: textLines.Count;
+
 				for (int i = 0; i < initialCount; i++)
 					visibleLines.Add(""); // Reserve lines
 
@@ -296,10 +332,17 @@ private void OnValidate()
 			}
 			else
 			{
-				int initialCount = Mathf.Min(maxVisibleLines, textLines.Count);
-				visibleLines.AddRange(textLines.Take(initialCount));
+				if (!enablePagination && !useTypewriterEffect)
+				{
+					textComponent.text = string.Join("", textLines); // No forced newlines
+					currentLineIndex = textLines.Count;
+					return;
+				}
+
+				int linesToShow = enablePagination ? Mathf.Min(maxVisibleLines, textLines.Count) : textLines.Count;
+				visibleLines.AddRange(textLines.Take(linesToShow));
 				textComponent.text = string.Join("\n", visibleLines);
-				currentLineIndex = initialCount;
+				currentLineIndex = linesToShow;
 			}
 		}
 
@@ -322,38 +365,48 @@ private void OnValidate()
 
 		public void Continue()
 		{
+			TryContinue();
+		}
+
+		public bool TryContinue()
+		{
+			// 1) If we’re mid-type, speed it up
 			if (typewriterCoroutine != null)
 			{
 				isSpeedingUp = true;
-				return;
+				return true;
 			}
 
+			// 2) If we’re still typing the initial block, or out of lines, do nothing
 			if (isTypingInitialBlock || currentLineIndex >= textLines.Count)
-				return;
+				return false;
 
-			// Loop through next lines and skip animation for empty lines
+			// 3) Otherwise, advance through lines
 			while (currentLineIndex < textLines.Count)
 			{
 				string nextLine = textLines[currentLineIndex++];
 
+				// Slide window if needed
 				if (visibleLines.Count >= maxVisibleLines)
 					visibleLines.RemoveAt(0);
 
-				// Always show the line even if empty
 				visibleLines.Add(nextLine);
 
-				// If it's not empty, start animation and stop the loop
+				// If it’s a non-empty line, start typing it and return true
 				if (!string.IsNullOrWhiteSpace(nextLine))
 				{
 					string prefix = string.Join("\n", visibleLines.Take(visibleLines.Count - 1));
 					if (!string.IsNullOrEmpty(prefix)) prefix += "\n";
 
 					typewriterCoroutine = StartCoroutine(TypeLine(nextLine, visibleLines.Count - 1, prefix));
-					return;
+					return true;
 				}
+
+				// If it was just whitespace, loop to the next line automatically
 			}
 
-			// If we get here, there were no more lines to show
+			// No more lines to show
+			return false;
 		}
 
 		private IEnumerator TypeLine(string line, int visibleLineIndex, string prefix)
@@ -423,6 +476,19 @@ private void OnValidate()
 			typewriterCoroutine = null;
 		}
 
+		// Add this helper to your class:
+		private void StopTypewriterEffect()
+		{
+			if (typewriterCoroutine != null)
+			{
+				StopCoroutine(typewriterCoroutine);
+				typewriterCoroutine = null;
+			}
+			isTypingInitialBlock = false;
+			isSpeedingUp = false;
+		}
+
+
 		private void PlayCharacterSound(char c)
 		{
 			if (!char.IsWhiteSpace(c) && characterSounds != null && characterSounds.Length > 0)
@@ -465,21 +531,45 @@ private void OnValidate()
 
 		private void TruncateTextInEditor()
 		{
-			if (textComponent == null || dataStore == null || userData == null || string.IsNullOrEmpty(sheet) || string.IsNullOrEmpty(key))
+			if (textComponent == null
+				|| dataStore == null
+				|| userData == null
+				|| string.IsNullOrEmpty(sheet)
+				|| string.IsNullOrEmpty(key))
 				return;
 
+			// Resolve full string
 			string lang = userData.Get("Language");
 			if (string.IsNullOrEmpty(lang)) return;
 
 			string rawText = dataStore.GetFieldValueByKey(sheet, "Key", key, lang);
-			string resolvedText = ReplacePlaceholders(rawText);
+			string resolvedText = !string.IsNullOrEmpty(rawText)
+				? ReplacePlaceholders(rawText)
+				: $"[{key}]";
 
+			// 1) Force the UI layout to update so we get correct rect sizes:
+			Canvas.ForceUpdateCanvases();
+#if UNITY_EDITOR
+			// Rebuild this text's own RectTransform...
+			LayoutRebuilder.ForceRebuildLayoutImmediate(textComponent.rectTransform);
+			// ...and also its parent (if any) so VerticalLayoutGroup settles:
+			if (transform.parent is RectTransform parentRect)
+				LayoutRebuilder.ForceRebuildLayoutImmediate(parentRect);
+#endif
+
+			// 2) If pagination is off, dump full text:
+			if (!enablePagination)
+			{
+				textComponent.text = resolvedText;
+				return;
+			}
+
+			// 3) Otherwise split into lines same as at runtime and show up to maxVisibleLines:
 			GenerateTextLines(resolvedText);
-
-			var truncated = textLines.Take(maxVisibleLines).ToList();
+			int linesToShow = Mathf.Min(maxVisibleLines, textLines.Count);
+			var truncated = textLines.Take(linesToShow);
 			textComponent.text = string.Join("\n", truncated);
 		}
-
 
 		/// <summary>
 		/// Returns true if the typewriter is currently animating text.
