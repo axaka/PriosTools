@@ -1,6 +1,6 @@
 # PriosTools
 
-**PriosTools** is a modular Unity package that streamlines game development with tools for live data integration, localization, events, save systems, UI animation, and debugging — all plug-and-play ready.
+**PriosTools** is a modular Unity package that streamlines game development by offering a suite of reusable systems — from data loading to event dispatching, localization, UI animation, and debugging — all plug-and-play ready.
 
 ---
 
@@ -11,23 +11,21 @@
   - Auto-generate C# classes.
   - Supports runtime reloading — no need to rebuild for content fixes.
 
-**🌍 Localization System**
+- **🌍 Localization System**
   - Spreadsheet-based translations.
   - Dynamic placeholders (e.g., player name).
   - **Typewriter Effect** (fully featured):
-    - Text animates character-by-character with full **rich text support**, preserving all tags and formatting—even across word-wrapped/paginated lines.
-    - **Only the newly revealed text animates**; existing visible text stays static.
+    - Text animates character-by-character with full **rich text** support.
     - Instantly skips and shows empty lines (empty lines do not consume a "continue" action in any scroll mode).
     - Auto-closes rich text tags at line breaks to avoid broken formatting.
-    - Handles all pagination/scrolling modes: one-line-at-a-time and full-page, with correct tag context.
-    - Honors pagination settings and editor preview sizing (`TruncateTextInEditor`), forces layout rebuilds under layout groups.
-    - Supports per-character audio (randomized pitch/clip), and customizable punctuation pause timing.
-    - Use `TryContinue()` (returns `bool`) for logic or `Continue()` (void) for UI binding.
-    - Clean API: `SetKeyAndShow()`, `Continue()`, `IsTyping`, `IsComplete`, `HasMoreText`, etc.
-    - **Supports ScriptableObject (SO) settings** for centralized, reusable localization configs.
+    - Handles all tags and formatting—even across word-wrapped/paginated lines.
 
 - **⚡ Event System**
   - Decouple logic using `PriosEvents`, `PriosEventTrigger`, `PriosEventListener`.
+  - **Strongly-typed generic API**:
+    - `AddListener<T>(string key, Action<T> callback)`
+    - `RemoveListener<T>(string key, Action<T> callback)`
+    - `TriggerEvent<T>(string key, T value)`
 
 - **💾 SaveGame System**
   - Full save/load solution with Editor tools.
