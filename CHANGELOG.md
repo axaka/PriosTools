@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),  
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2025-07-09
+
+### Improved
+- **Rich Text Typewriter & Pagination**:  
+  - Typewriter and pagination now handle **empty lines instantly**—empty lines are displayed immediately and do not consume a "continue" action in any scroll mode.
+  - Internal routines now correctly combine a static prefix (previous lines) with only the *newly revealed* content for typewriter animation, ensuring only the new content types out while keeping already visible text static.
+  - Unified to a single `RevealRichText(prefix, newContent, onFinish)` coroutine for all animation modes.
+  - Rich text tag context is accurately reconstructed for every visible window, fixing prior issues with cut-off tags at the start of lines and ensuring all formatting is preserved regardless of line breaks or pagination.
+
+### Changed
+- **Continue Behavior**:  
+  - All modes now **skip over empty lines automatically**, so only visible non-empty lines trigger the typewriter/page effect or consume a continue click.
+- **Settings as ScriptableObject**:  
+  - `TextLocalizerSettings` can now be used as a **ScriptableObject (SO)**, allowing you to share and edit localization settings across multiple scenes or components via the Unity asset system.
+
+### Fixed
+- **Tag Handling**:  
+  - Eliminated issues where tags were dropped from the start of lines or caused visual glitches when lines began with a closing tag (e.g., missing `<b>` at the start of the first visible line).
+  - Corrected bugs with rich tag context when typewriter and pagination interacted (especially on scrolling and page turns).
+- **Scrolling**:  
+  - Prevented unwanted extra lines from being counted due to tags being split by TMP word wrapping.
+
+---
+
 ## [1.1.3] - 2025-07-04
 
 ### Improved
@@ -19,7 +43,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Bugfix
 - **SetKeyAndShow**:
-  - Cleanes the state properly and UpdateText() doesn't run more than once even if SetKeyAndShow is ran more than once.
+  - Cleans the state properly and UpdateText() doesn't run more than once even if SetKeyAndShow is ran more than once.
 
 
 ## [1.1.1] - 2025-06-11

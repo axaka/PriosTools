@@ -237,7 +237,7 @@ namespace PriosTools
 		{
 			foreach (var pair in TypedLookup)
 			{
-				if (pair.Key.Name == typeName)
+				if (pair.Key.Name == "PDS_" + typeName)
 				{
 					return (IList)pair.Value;
 				}
@@ -320,7 +320,13 @@ namespace PriosTools
 				return targetField.GetValue(item)?.ToString();
 			}
 
-			Debug.LogWarning($"No matching entry with {matchFieldName} = '{matchValue}' in type '{typeName}'.");
+			if (Application.isPlaying)
+			{
+				Debug.LogWarning(
+					$"No matching entry with {matchFieldName} = '{matchValue}' in type '{typeName}'."
+				);
+			}
+
 			return null;
 		}
 
