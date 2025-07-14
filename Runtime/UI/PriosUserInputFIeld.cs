@@ -118,16 +118,16 @@ namespace PriosTools
 				inputField.SetTextWithoutNotify(newValue);
 		}
 
-#if UNITY_EDITOR
 		public void Refresh()
 		{
+#if UNITY_EDITOR
 			if (!Application.isPlaying)
 			{
 				EnsureComponent();
 				InitializeInput();
 			}
-		}
 #endif
+		}
 
 	}
 }
