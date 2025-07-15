@@ -161,8 +161,7 @@ namespace PriosTools
 			if (ActiveSettings == null ||
 				ActiveSettings.dataStore == null ||
 				ActiveSettings.userData == null ||
-				string.IsNullOrEmpty(ActiveSettings.sheet) ||
-				string.IsNullOrEmpty(key))
+				string.IsNullOrEmpty(ActiveSettings.sheet))
 			{
 				textComponent.text = "[Missing Configuration]";
 				return;
@@ -178,7 +177,7 @@ namespace PriosTools
 #if UNITY_EDITOR
 			if (!Application.isPlaying)
 			{
-				textComponent.text = string.IsNullOrEmpty(key) ? "[Key]" : $"[{key}]";
+				textComponent.text = string.IsNullOrEmpty(key) ? "[Missing Key]" : $"[{key}]";
 				return;
 			}
 #endif
@@ -189,7 +188,7 @@ namespace PriosTools
 			isSpeedingUp = false;
 
 			string rawText = ActiveSettings.dataStore.GetFieldValueByKey(ActiveSettings.sheet, "Key", key, lang);
-			fullText = !string.IsNullOrEmpty(rawText) ? ApplyReplacementsAndPlaceholders(rawText) : $"[{key}]";
+			fullText = !string.IsNullOrEmpty(rawText) ? ApplyReplacementsAndPlaceholders(rawText) : $"";
 
 			// Force layout rebuild before measuring text height
 			Canvas.ForceUpdateCanvases();
