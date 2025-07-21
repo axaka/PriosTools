@@ -82,24 +82,31 @@ namespace PriosTools
 			if (textComponent == null)
 				textComponent = GetComponent<TMP_Text>();
 
-			textComponent.enableWordWrapping = true;
-			textComponent.overflowMode = TextOverflowModes.Overflow;
-			textComponent.alignment = TextAlignmentOptions.TopLeft;
-			textComponent.enableAutoSizing = false;
-			textComponent.lineSpacing = 0f;
-
-			if (textComponent.margin == Vector4.zero)
-				textComponent.margin = new Vector4(10, 10, 10, 10);
-
-			if (audioSource == null)
+			if (ActiveSettings.enablePagination)
 			{
-				audioSource = GetComponent<AudioSource>();
-				if (audioSource == null)
-					audioSource = gameObject.AddComponent<AudioSource>();
-
-				audioSource.playOnAwake = false;
-				audioSource.spatialBlend = 0f;
+				textComponent.enableAutoSizing = false;
+				textComponent.enableWordWrapping = true;
 			}
+
+			if (ActiveSettings.useTypewriterEffect)
+			{
+				//textComponent.overflowMode = TextOverflowModes.Overflow;
+				//textComponent.alignment = TextAlignmentOptions.TopLeft;
+				//textComponent.lineSpacing = 0f;
+
+				if (audioSource == null && ActiveSettings.characterSounds.Length > 0)
+				{
+					audioSource = GetComponent<AudioSource>();
+					if (audioSource == null)
+						audioSource = gameObject.AddComponent<AudioSource>();
+
+					audioSource.playOnAwake = false;
+					audioSource.spatialBlend = 0f;
+				}
+			}
+
+
+
 		}
 
 		private readonly List<string> watchedKeys = new();
