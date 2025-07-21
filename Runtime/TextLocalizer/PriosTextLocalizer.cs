@@ -152,6 +152,11 @@ namespace PriosTools
 
 		public void SetKeyAndShow(string newKey)
 		{
+			if (textComponent == null)
+			{
+				key = newKey;
+				return;
+			}
 			currentLineIndex = 0;
 			isSpeedingUp = false;
 			isTypingInitialBlock = false;

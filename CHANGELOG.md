@@ -6,11 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [1.3.5] - 2025-07-21
+
+### Fixed issue with SetKeyAndShow function when ran before it is initialized properly
+- Fixed issue with SetKeyAndShow function when ran before it is initialized properly
+
+
 ## [1.3.4] - 2025-07-21
 
 ### Removed some TMP_Text restrictions with Localization
 - Less rigid behavior for TMP_Text configuration — potentially allowing more customization or dynamic settings.
 - AudioSource setup is now more conditional and only initialized if relevant settings (useTypewriterEffect and characterSounds) are enabled.
+
 
 ## [1.3.3] - 2025-07-15
 
